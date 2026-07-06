@@ -61,5 +61,4 @@ public class ChessPosition {
             return false;
         return true;
     }
-
 }
