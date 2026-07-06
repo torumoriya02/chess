@@ -1,6 +1,8 @@
 package chess;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Objects;
 
 /**
  * A class that can manage a chess game, making moves on a board
@@ -51,7 +53,38 @@ public class ChessGame {
      * startPosition
      */
     public Collection<ChessMove> validMoves(ChessPosition startPosition) {
-        throw new RuntimeException("Not implemented");
+        ChessPiece piece = board.getPiece(startPosition);
+
+        if (piece == null) {
+            return null;
+        }
+
+        Collection<ChessMove> legalMoves = new ArrayList<>();
+
+        for (ChessMove move : piece.pieceMoves(board, startPosition)) {
+            ChessBoard testBoard = copyBoard(board);
+            ChessPiece testPiece = testBoard.getPiece(move.getStartPosition());
+
+            testBoard.addPiece(move.getStartPosition(), null);
+
+            if (move.getPromotionPiece() != null) {
+                testBoard.addPiece(
+                        move.getEndPosition(),
+                        new ChessPiece(testPiece.getTeamColor(), move.getPromotionPiece())
+                );
+            } else {
+                testBoard.addPiece(move.getEndPosition(), testPiece);
+            }
+
+            ChessGame testGame = new ChessGame();
+            testGame.setBoard(testBoard);
+
+            if (!testGame.isInCheck(piece.getTeamColor())) {
+                legalMoves.add(move);
+            }
+        }
+
+        return legalMoves;
     }
 
     /**
@@ -71,9 +104,8 @@ public class ChessGame {
      * @return True if the specified team is in check
      */
     public boolean isInCheck(TeamColor teamColor) {
-        throw new RuntimeException("Not implemented");
+        throw new RuntimeException("Not implemented");;
     }
-
     /**
      * Determines if the given team is in checkmate
      *
