@@ -234,4 +234,26 @@ public class ChessGame {
 
         return false;
     }
+
+    private ChessBoard copyBoard(ChessBoard originalBoard) {
+        ChessBoard newBoard = new ChessBoard();
+
+        for (int row = 1; row <= 8; row++) {
+            for (int col = 1; col <= 8; col++) {
+                ChessPosition position = new ChessPosition(row, col);
+                ChessPiece piece = originalBoard.getPiece(position);
+
+                if (piece != null) {
+                    newBoard.addPiece(
+                            position,
+                            new ChessPiece(piece.getTeamColor(), piece.getPieceType())
+                    );
+                }
+            }
+        }
+
+        return newBoard;
+    }
+
+    
 }
