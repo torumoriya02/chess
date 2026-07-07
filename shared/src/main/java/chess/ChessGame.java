@@ -255,5 +255,11 @@ public class ChessGame {
         return newBoard;
     }
 
-    
+    private TeamColor oppositeTeam(TeamColor teamColor) {
+        if (teamColor == TeamColor.WHITE) {
+            return TeamColor.BLACK;
+        }
+
+        return TeamColor.WHITE;
+    }
 }
