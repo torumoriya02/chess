@@ -262,4 +262,47 @@ public class ChessGame {
 
         return TeamColor.WHITE;
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+
+        if (!(o instanceof ChessGame other)) {
+            return false;
+        }
+
+        if (teamTurn != other.teamTurn) {
+            return false;
+        }
+
+        for (int row = 1; row <= 8; row++) {
+            for (int col = 1; col <= 8; col++) {
+                ChessPosition position = new ChessPosition(row, col);
+
+                ChessPiece thisPiece = board.getPiece(position);
+                ChessPiece otherPiece = other.board.getPiece(position);
+
+                if (!Objects.equals(thisPiece, otherPiece)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    @Override
+    public int hashCode() {
+        int result = Objects.hash(teamTurn);
+
+        for (int row = 1; row <= 8; row++) {
+            for (int col = 1; col <= 8; col++) {
+                ChessPosition position = new ChessPosition(row, col);
+                ChessPiece piece = board.getPiece(position);
+                result = 31 * result + Objects.hashCode(piece);
+            }
+        }
+        return result;
+    }
 }
