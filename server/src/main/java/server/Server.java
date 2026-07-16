@@ -9,6 +9,8 @@ import service.UserService;
 import service.LoginRequest;
 import service.GameService;
 import service.CreateGameRequest;
+import service.JoinGameRequest;
+import service.ErrorResult;
 
 public class Server {
 
@@ -84,6 +86,50 @@ public class Server {
             ctx.status(200);
             ctx.contentType("application/json");
             ctx.result(gson.toJson(result));
+        });
+
+        javalin.put("/game", ctx -> {
+            String authToken = ctx.header("authorization");
+
+            JoinGameRequest request =
+                    gson.fromJson(ctx.body(), JoinGameRequest.class);
+
+            gameService.joinGame(authToken, request);
+
+            ctx.status(200);
+            ctx.result("{}");
+        });
+
+        javalin.exception(IllegalArgumentException.class, (exception, ctx) -> {
+            ctx.status(400);
+            ctx.contentType("application/json");
+            ctx.result(gson.toJson(
+                    new ErrorResult("Error: bad request")
+            ));
+        });
+
+        javalin.exception(SecurityException.class, (exception, ctx) -> {
+            ctx.status(401);
+            ctx.contentType("application/json");
+            ctx.result(gson.toJson(
+                    new ErrorResult("Error: unauthorized")
+            ));
+        });
+
+        javalin.exception(IllegalStateException.class, (exception, ctx) -> {
+            ctx.status(403);
+            ctx.contentType("application/json");
+            ctx.result(gson.toJson(
+                    new ErrorResult("Error: already taken")
+            ));
+        });
+
+        javalin.exception(Exception.class, (exception, ctx) -> {
+            ctx.status(500);
+            ctx.contentType("application/json");
+            ctx.result(gson.toJson(
+                    new ErrorResult("Error: " + exception.getMessage())
+            ));
         });
     }
 
