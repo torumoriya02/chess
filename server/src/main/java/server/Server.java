@@ -6,6 +6,7 @@ import service.ClearService;
 import com.google.gson.Gson;
 import service.RegisterRequest;
 import service.UserService;
+import service.LoginRequest;
 
 public class Server {
 
@@ -34,6 +35,17 @@ public class Server {
             ctx.status(200);
             ctx.contentType("application/json");
             ctx.result(gson.toJson(result));
+        });
+
+        javalin.post("/session", ctx -> {
+        LoginRequest request =
+                gson.fromJson(ctx.body(), LoginRequest.class);
+
+        var result = userService.login(request);
+
+        ctx.status(200);
+        ctx.contentType("application/json");
+        ctx.result(gson.toJson(result));
         });
     }
 
