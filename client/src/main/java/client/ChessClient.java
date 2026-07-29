@@ -117,6 +117,8 @@ public class ChessClient {
             listGames();
         } else if (input.equalsIgnoreCase("play game")) {
             playGame();
+        } else if (input.equalsIgnoreCase("observe game")) {
+            observeGame();
         } else {
             System.out.println("Unknown command. Type help.");
         }
@@ -235,6 +237,33 @@ public class ChessClient {
             System.out.println("Color must be WHITE or BLACK.");
         } catch (Exception ex) {
             System.out.println("Unable to join game.");
+        }
+    }
+
+    private void observeGame() {
+        try {
+            if (listedGames.length == 0) {
+                System.out.println("List games first.");
+                return;
+            }
+
+            System.out.print("Game number: ");
+            int gameNumber = Integer.parseInt(scanner.nextLine().trim());
+
+            if (gameNumber < 1 || gameNumber > listedGames.length) {
+                System.out.println("Invalid game number.");
+                return;
+            }
+
+            GameData selectedGame = listedGames[gameNumber - 1];
+
+            System.out.println("Observing " + selectedGame.gameName());
+
+            // We’ll replace this with the board-drawing method next.
+            System.out.println("Chessboard will be displayed here.");
+
+        } catch (NumberFormatException ex) {
+            System.out.println("Game number must be a number.");
         }
     }
 }
