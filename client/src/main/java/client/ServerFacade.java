@@ -102,4 +102,28 @@ public class ServerFacade {
 
         return gson.fromJson(response.body(), AuthData.class);
     }
+
+    public void logout(String authToken)
+            throws IOException, InterruptedException {
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(serverUrl + "/session"))
+                .header("authorization", authToken)
+                .DELETE()
+                .build();
+
+        HttpResponse<String> response = httpClient.send(
+                request,
+                HttpResponse.BodyHandlers.ofString()
+        );
+
+        if (response.statusCode() != 200) {
+            throw new IOException(
+                    "Unable to logout: "
+                            + response.statusCode()
+                            + " "
+                            + response.body()
+            );
+        }
+    }
 }

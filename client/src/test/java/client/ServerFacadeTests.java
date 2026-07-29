@@ -6,6 +6,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import server.Server;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -91,4 +92,22 @@ public class ServerFacadeTests {
                 () -> facade.login("player1", "wrongPassword")
         );
     }
+
+    @Test
+    void logoutSuccess() throws Exception {
+        var auth = facade.register(
+                "player1",
+                "password",
+                "player1@email.com"
+        );
+
+        assertDoesNotThrow(() -> facade.logout(auth.authToken()));
     }
+    @Test
+    void logoutFailure() {
+        assertThrows(
+                Exception.class,
+                () -> facade.logout("bad-token")
+        );
+    }
+}
