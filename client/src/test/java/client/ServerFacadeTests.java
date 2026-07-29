@@ -4,6 +4,8 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import model.GameData;
 import server.Server;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -135,6 +137,31 @@ public class ServerFacadeTests {
                         "bad-token",
                         "My Game"
                 )
+        );
+    }
+
+    @Test
+    void listGamesSuccess() throws Exception {
+        var auth = facade.register(
+                "player1",
+                "password",
+                "player1@email.com"
+        );
+
+        facade.createGame(auth.authToken(), "Game One");
+        facade.createGame(auth.authToken(), "Game Two");
+
+        GameData[] games = facade.listGames(auth.authToken());
+
+        assertNotNull(games);
+        assertEquals(2, games.length);
+    }
+
+    @Test
+    void listGamesFailure() {
+        assertThrows(
+                Exception.class,
+                () -> facade.listGames("bad-token")
         );
     }
 }
