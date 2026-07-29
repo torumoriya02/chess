@@ -2,6 +2,7 @@ package client;
 
 import java.util.Scanner;
 import model.GameData;
+import chess.ChessGame;
 
 public class ChessClient {
 
@@ -114,6 +115,8 @@ public class ChessClient {
             createGame();
         } else if (input.equalsIgnoreCase("list games")) {
             listGames();
+        } else if (input.equalsIgnoreCase("play game")) {
+            playGame();
         } else {
             System.out.println("Unknown command. Type help.");
         }
@@ -189,6 +192,49 @@ public class ChessClient {
 
         } catch (Exception ex) {
             System.out.println("Unable to list games.");
+        }
+    }
+
+    private void playGame() {
+        try {
+            if (listedGames.length == 0) {
+                System.out.println("List games first.");
+                return;
+            }
+
+            System.out.print("Game number: ");
+            int gameNumber = Integer.parseInt(scanner.nextLine().trim());
+
+            if (gameNumber < 1 || gameNumber > listedGames.length) {
+                System.out.println("Invalid game number.");
+                return;
+            }
+
+            System.out.print("Color (WHITE or BLACK): ");
+            String colorInput = scanner.nextLine().trim().toUpperCase();
+
+            ChessGame.TeamColor color =
+                    ChessGame.TeamColor.valueOf(colorInput);
+
+            GameData selectedGame = listedGames[gameNumber - 1];
+
+            facade.joinGame(
+                    authToken,
+                    selectedGame.gameID(),
+                    color
+            );
+
+            System.out.println(
+                    "Joined " + selectedGame.gameName()
+                            + " as " + color
+            );
+
+        } catch (NumberFormatException ex) {
+            System.out.println("Game number must be a number.");
+        } catch (IllegalArgumentException ex) {
+            System.out.println("Color must be WHITE or BLACK.");
+        } catch (Exception ex) {
+            System.out.println("Unable to join game.");
         }
     }
 }
