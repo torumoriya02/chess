@@ -1,17 +1,23 @@
 package client;
 
-import java.util.Scanner;
-import model.GameData;
 import chess.ChessGame;
+import model.GameData;
+
+import java.util.Scanner;
 
 public class ChessClient {
 
     private final Scanner scanner = new Scanner(System.in);
-
     private final ServerFacade facade;
-    private String authToken;
 
+    private String authToken;
     private GameData[] listedGames = new GameData[0];
+    private State state = State.PRELOGIN;
+
+    private enum State {
+        PRELOGIN,
+        POSTLOGIN
+    }
 
     public ChessClient(String serverUrl) {
         this.facade = new ServerFacade(serverUrl);
@@ -37,62 +43,6 @@ public class ChessClient {
             }
         }
     }
-
-    private void printPreloginHelp() {
-        System.out.println("help     - show available commands");
-        System.out.println("login    - log in to your account");
-        System.out.println("register - create a new account");
-        System.out.println("quit     - exit the program");
-    }
-
-
-    private void login() {
-        try {
-            System.out.print("Username: ");
-            String username = scanner.nextLine().trim();
-
-            System.out.print("Password: ");
-            String password = scanner.nextLine().trim();
-
-            var result = facade.login(username, password);
-            authToken = result.authToken();
-            state = State.POSTLOGIN;
-
-            System.out.println("Logged in as " + result.username());
-
-        } catch (Exception ex) {
-            System.out.println("Unable to log in. Check your username and password.");
-        }
-    }
-
-    private void register() {
-        try {
-            System.out.print("Username: ");
-            String username = scanner.nextLine().trim();
-
-            System.out.print("Password: ");
-            String password = scanner.nextLine().trim();
-
-            System.out.print("Email: ");
-            String email = scanner.nextLine().trim();
-
-            var result = facade.register(username, password, email);
-            authToken = result.authToken();
-            state = State.POSTLOGIN;
-
-            System.out.println("Registered and logged in as " + result.username());
-
-        } catch (Exception ex) {
-            System.out.println("Unable to register. Please check your information.");
-        }
-    }
-
-    private enum State {
-        PRELOGIN,
-        POSTLOGIN
-    }
-
-    private State state = State.PRELOGIN;
 
     private void handlePreloginCommand(String input) {
         if (input.equalsIgnoreCase("help")) {
@@ -124,6 +74,13 @@ public class ChessClient {
         }
     }
 
+    private void printPreloginHelp() {
+        System.out.println("help     - show available commands");
+        System.out.println("login    - log in to your account");
+        System.out.println("register - create a new account");
+        System.out.println("quit     - exit the program");
+    }
+
     private void printPostloginHelp() {
         System.out.println("help         - show available commands");
         System.out.println("logout       - log out");
@@ -131,13 +88,56 @@ public class ChessClient {
         System.out.println("list games   - list available games");
         System.out.println("play game    - join a game");
         System.out.println("observe game - observe a game");
+        System.out.println("quit         - exit the program");
+    }
+
+    private void login() {
+        try {
+            System.out.print("Username: ");
+            String username = scanner.nextLine().trim();
+
+            System.out.print("Password: ");
+            String password = scanner.nextLine().trim();
+
+            var result = facade.login(username, password);
+            authToken = result.authToken();
+            state = State.POSTLOGIN;
+
+            System.out.println("Logged in as " + result.username());
+        } catch (Exception ex) {
+            System.out.println("Unable to log in. Check your username and password.");
+        }
+    }
+
+    private void register() {
+        try {
+            System.out.print("Username: ");
+            String username = scanner.nextLine().trim();
+
+            System.out.print("Password: ");
+            String password = scanner.nextLine().trim();
+
+            System.out.print("Email: ");
+            String email = scanner.nextLine().trim();
+
+            var result = facade.register(username, password, email);
+            authToken = result.authToken();
+            state = State.POSTLOGIN;
+
+            System.out.println("Registered and logged in as " + result.username());
+        } catch (Exception ex) {
+            System.out.println("Unable to register. Please check your information.");
+        }
     }
 
     private void logout() {
         try {
             facade.logout(authToken);
+
             authToken = null;
+            listedGames = new GameData[0];
             state = State.PRELOGIN;
+
             System.out.println("Logged out.");
         } catch (Exception ex) {
             System.out.println("Unable to log out.");
@@ -155,9 +155,7 @@ public class ChessClient {
             }
 
             facade.createGame(authToken, gameName);
-
             System.out.println("Game created.");
-
         } catch (Exception ex) {
             System.out.println("Unable to create game.");
         }
@@ -167,7 +165,8 @@ public class ChessClient {
         try {
             listedGames = facade.listGames(authToken);
 
-            if (listedGames.length == 0) {
+            if (listedGames == null || listedGames.length == 0) {
+                listedGames = new GameData[0];
                 System.out.println("No games available.");
                 return;
             }
@@ -191,7 +190,6 @@ public class ChessClient {
                         black
                 );
             }
-
         } catch (Exception ex) {
             System.out.println("Unable to list games.");
         }
@@ -231,6 +229,9 @@ public class ChessClient {
                             + " as " + color
             );
 
+            ChessGame initialGame = new ChessGame();
+            BoardDrawer.draw(initialGame.getBoard(), color);
+
         } catch (NumberFormatException ex) {
             System.out.println("Game number must be a number.");
         } catch (IllegalArgumentException ex) {
@@ -259,11 +260,17 @@ public class ChessClient {
 
             System.out.println("Observing " + selectedGame.gameName());
 
-            // We’ll replace this with the board-drawing method next.
-            System.out.println("Chessboard will be displayed here.");
+            ChessGame initialGame = new ChessGame();
+
+            BoardDrawer.draw(
+                    initialGame.getBoard(),
+                    ChessGame.TeamColor.WHITE
+            );
 
         } catch (NumberFormatException ex) {
             System.out.println("Game number must be a number.");
+        } catch (Exception ex) {
+            System.out.println("Unable to observe game.");
         }
     }
 }

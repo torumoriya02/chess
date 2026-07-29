@@ -29,7 +29,24 @@ public class BoardDrawer {
                         new ChessPosition(rank, file)
                 );
 
-                System.out.print(pieceSymbol(piece) + " ");
+                boolean lightSquare = (rank + file) % 2 == 1;
+                String background = lightSquare ? LIGHT_SQUARE : DARK_SQUARE;
+
+                String foreground = "";
+                if (piece != null) {
+                    foreground = piece.getTeamColor() == ChessGame.TeamColor.WHITE
+                            ? WHITE_PIECE
+                            : BLACK_PIECE;
+                }
+
+                System.out.print(
+                        background
+                                + foreground
+                                + " "
+                                + pieceSymbol(piece)
+                                + " "
+                                + RESET
+                );
             }
 
             System.out.println(rank);
@@ -51,7 +68,7 @@ public class BoardDrawer {
 
     private static String pieceSymbol(ChessPiece piece) {
         if (piece == null) {
-            return ".";
+            return " ";
         }
 
         return switch (piece.getPieceType()) {
@@ -63,4 +80,12 @@ public class BoardDrawer {
             case PAWN -> piece.getTeamColor() == ChessGame.TeamColor.WHITE ? "♙" : "♟";
         };
     }
+
+    private static final String RESET = "\u001B[0m";
+    private static final String LIGHT_SQUARE = "\u001B[47m";
+    private static final String DARK_SQUARE = "\u001B[100m";
+    private static final String WHITE_PIECE = "\u001B[31m";
+    private static final String BLACK_PIECE = "\u001B[34m";
+
+
 }
