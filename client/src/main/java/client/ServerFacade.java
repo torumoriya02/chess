@@ -48,6 +48,11 @@ public class ServerFacade {
             String email
     ) {
     }
+    private record LoginRequest(
+            String username,
+            String password
+    ) {
+    }
 
     public void clear() throws IOException, InterruptedException {
         HttpRequest request = HttpRequest.newBuilder()
@@ -68,5 +73,33 @@ public class ServerFacade {
                             + response.body()
             );
         }
+    }
+
+    public AuthData login(String username, String password)
+            throws IOException, InterruptedException {
+
+        String json = gson.toJson(new LoginRequest(username, password));
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(serverUrl + "/session"))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(json))
+                .build();
+
+        HttpResponse<String> response = httpClient.send(
+                request,
+                HttpResponse.BodyHandlers.ofString()
+        );
+
+        if (response.statusCode() != 200) {
+            throw new IOException(
+                    "Unable to login: "
+                            + response.statusCode()
+                            + " "
+                            + response.body()
+            );
+        }
+
+        return gson.fromJson(response.body(), AuthData.class);
     }
 }

@@ -62,4 +62,33 @@ public class ServerFacadeTests {
                 )
         );
     }
-}
+
+    @Test
+    void loginSuccess() throws Exception {
+        facade.register(
+                "player1",
+                "password",
+                "player1@email.com"
+        );
+
+        var result = facade.login("player1", "password");
+
+        assertNotNull(result);
+        assertNotNull(result.authToken());
+        assertEquals("player1", result.username());
+    }
+
+    @Test
+    void loginFailure() throws Exception {
+        facade.register(
+                "player1",
+                "password",
+                "player1@email.com"
+        );
+
+        assertThrows(
+                Exception.class,
+                () -> facade.login("player1", "wrongPassword")
+        );
+    }
+    }
