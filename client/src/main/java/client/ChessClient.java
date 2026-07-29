@@ -1,17 +1,18 @@
 package client;
 
 import java.util.Scanner;
+import model.GameData;
 
 public class ChessClient {
 
-    private final String serverUrl;
     private final Scanner scanner = new Scanner(System.in);
 
     private final ServerFacade facade;
     private String authToken;
 
+    private GameData[] listedGames = new GameData[0];
+
     public ChessClient(String serverUrl) {
-        this.serverUrl = serverUrl;
         this.facade = new ServerFacade(serverUrl);
     }
 
@@ -28,12 +29,10 @@ public class ChessClient {
                 return;
             }
 
-            if (input.equalsIgnoreCase("help")) {
-                printPreloginHelp();
-            } else if (input.equalsIgnoreCase("register")) {
-                register();
+            if (state == State.PRELOGIN) {
+                handlePreloginCommand(input);
             } else {
-                System.out.println("Unknown command. Type help.");
+                handlePostloginCommand(input);
             }
         }
     }
@@ -43,6 +42,26 @@ public class ChessClient {
         System.out.println("login    - log in to your account");
         System.out.println("register - create a new account");
         System.out.println("quit     - exit the program");
+    }
+
+
+    private void login() {
+        try {
+            System.out.print("Username: ");
+            String username = scanner.nextLine().trim();
+
+            System.out.print("Password: ");
+            String password = scanner.nextLine().trim();
+
+            var result = facade.login(username, password);
+            authToken = result.authToken();
+            state = State.POSTLOGIN;
+
+            System.out.println("Logged in as " + result.username());
+
+        } catch (Exception ex) {
+            System.out.println("Unable to log in. Check your username and password.");
+        }
     }
 
     private void register() {
@@ -58,6 +77,7 @@ public class ChessClient {
 
             var result = facade.register(username, password, email);
             authToken = result.authToken();
+            state = State.POSTLOGIN;
 
             System.out.println("Registered and logged in as " + result.username());
 
@@ -65,21 +85,110 @@ public class ChessClient {
             System.out.println("Unable to register. Please check your information.");
         }
     }
-    private void login() {
+
+    private enum State {
+        PRELOGIN,
+        POSTLOGIN
+    }
+
+    private State state = State.PRELOGIN;
+
+    private void handlePreloginCommand(String input) {
+        if (input.equalsIgnoreCase("help")) {
+            printPreloginHelp();
+        } else if (input.equalsIgnoreCase("register")) {
+            register();
+        } else if (input.equalsIgnoreCase("login")) {
+            login();
+        } else {
+            System.out.println("Unknown command. Type help.");
+        }
+    }
+
+    private void handlePostloginCommand(String input) {
+        if (input.equalsIgnoreCase("help")) {
+            printPostloginHelp();
+        } else if (input.equalsIgnoreCase("logout")) {
+            logout();
+        } else if (input.equalsIgnoreCase("create game")) {
+            createGame();
+        } else if (input.equalsIgnoreCase("list games")) {
+            listGames();
+        } else {
+            System.out.println("Unknown command. Type help.");
+        }
+    }
+
+    private void printPostloginHelp() {
+        System.out.println("help         - show available commands");
+        System.out.println("logout       - log out");
+        System.out.println("create game  - create a new game");
+        System.out.println("list games   - list available games");
+        System.out.println("play game    - join a game");
+        System.out.println("observe game - observe a game");
+    }
+
+    private void logout() {
         try {
-            System.out.print("Username: ");
-            String username = scanner.nextLine().trim();
+            facade.logout(authToken);
+            authToken = null;
+            state = State.PRELOGIN;
+            System.out.println("Logged out.");
+        } catch (Exception ex) {
+            System.out.println("Unable to log out.");
+        }
+    }
 
-            System.out.print("Password: ");
-            String password = scanner.nextLine().trim();
+    private void createGame() {
+        try {
+            System.out.print("Game name: ");
+            String gameName = scanner.nextLine().trim();
 
-            var result = facade.login(username, password);
-            authToken = result.authToken();
+            if (gameName.isBlank()) {
+                System.out.println("Game name cannot be empty.");
+                return;
+            }
 
-            System.out.println("Logged in as " + result.username());
+            facade.createGame(authToken, gameName);
+
+            System.out.println("Game created.");
 
         } catch (Exception ex) {
-            System.out.println("Unable to log in. Check your username and password.");
+            System.out.println("Unable to create game.");
+        }
+    }
+
+    private void listGames() {
+        try {
+            listedGames = facade.listGames(authToken);
+
+            if (listedGames.length == 0) {
+                System.out.println("No games available.");
+                return;
+            }
+
+            for (int i = 0; i < listedGames.length; i++) {
+                GameData game = listedGames[i];
+
+                String white = game.whiteUsername() == null
+                        ? "available"
+                        : game.whiteUsername();
+
+                String black = game.blackUsername() == null
+                        ? "available"
+                        : game.blackUsername();
+
+                System.out.printf(
+                        "%d. %s | White: %s | Black: %s%n",
+                        i + 1,
+                        game.gameName(),
+                        white,
+                        black
+                );
+            }
+
+        } catch (Exception ex) {
+            System.out.println("Unable to list games.");
         }
     }
 }
