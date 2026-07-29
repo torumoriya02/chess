@@ -8,6 +8,7 @@ import server.Server;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ServerFacadeTests {
 
@@ -42,5 +43,23 @@ public class ServerFacadeTests {
     @BeforeEach
     void clearDatabase() throws Exception {
         facade.clear();
+    }
+
+    @Test
+    void registerFailure() throws Exception {
+        facade.register(
+                "player1",
+                "password",
+                "player1@email.com"
+        );
+
+        assertThrows(
+                Exception.class,
+                () -> facade.register(
+                        "player1",
+                        "anotherPassword",
+                        "another@email.com"
+                )
+        );
     }
 }
