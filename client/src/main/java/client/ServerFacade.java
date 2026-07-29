@@ -1,6 +1,8 @@
 package client;
 
 import com.google.gson.Gson;
+
+import chess.ChessGame;
 import model.AuthData;
 import model.GameData;
 
@@ -64,6 +66,9 @@ public class ServerFacade {
     private record ListGamesResult(GameData[] games) {
     }
 
+    private record JoinGameRequest(ChessGame.TeamColor playerColor,int gameID
+    ) {
+    }
     public void clear() throws IOException, InterruptedException {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(serverUrl + "/db"))
@@ -196,5 +201,34 @@ public class ServerFacade {
                 gson.fromJson(response.body(), ListGamesResult.class);
 
         return result.games();
+    }
+
+    public void joinGame(String authToken,int gameID,ChessGame.TeamColor playerColor
+    ) throws IOException, InterruptedException {
+
+        String json = gson.toJson(
+                new JoinGameRequest(playerColor, gameID)
+        );
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(serverUrl + "/game"))
+                .header("Content-Type", "application/json")
+                .header("authorization", authToken)
+                .PUT(HttpRequest.BodyPublishers.ofString(json))
+                .build();
+
+        HttpResponse<String> response = httpClient.send(
+                request,
+                HttpResponse.BodyHandlers.ofString()
+        );
+
+        if (response.statusCode() != 200) {
+            throw new IOException(
+                    "Unable to join game: "
+                            + response.statusCode()
+                            + " "
+                            + response.body()
+            );
+        }
     }
 }

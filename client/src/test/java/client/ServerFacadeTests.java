@@ -5,6 +5,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import chess.ChessGame;
 import model.GameData;
 import server.Server;
 
@@ -162,6 +163,46 @@ public class ServerFacadeTests {
         assertThrows(
                 Exception.class,
                 () -> facade.listGames("bad-token")
+        );
+    }
+
+    @Test
+    void joinGameSuccess() throws Exception {
+        var auth = facade.register(
+                "player1",
+                "password",
+                "player1@email.com"
+        );
+
+        int gameID = facade.createGame(
+                auth.authToken(),
+                "My Game"
+        );
+
+        assertDoesNotThrow(() ->
+                facade.joinGame(
+                        auth.authToken(),
+                        gameID,
+                        ChessGame.TeamColor.WHITE
+                )
+        );
+    }
+
+    @Test
+    void joinGameFailure() throws Exception {
+        var auth = facade.register(
+                "player1",
+                "password",
+                "player1@email.com"
+        );
+
+        assertThrows(
+                Exception.class,
+                () -> facade.joinGame(
+                        auth.authToken(),
+                        999999,
+                        ChessGame.TeamColor.WHITE
+                )
         );
     }
 }
