@@ -54,6 +54,12 @@ public class ServerFacade {
     ) {
     }
 
+    private record CreateGameRequest(String gameName) {
+    }
+
+    private record CreateGameResult(int gameID) {
+    }
+
     public void clear() throws IOException, InterruptedException {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(serverUrl + "/db"))
@@ -125,5 +131,37 @@ public class ServerFacade {
                             + response.body()
             );
         }
+    }
+
+    public int createGame(String authToken, String gameName)
+            throws IOException, InterruptedException {
+
+        String json = gson.toJson(new CreateGameRequest(gameName));
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(serverUrl + "/game"))
+                .header("Content-Type", "application/json")
+                .header("authorization", authToken)
+                .POST(HttpRequest.BodyPublishers.ofString(json))
+                .build();
+
+        HttpResponse<String> response = httpClient.send(
+                request,
+                HttpResponse.BodyHandlers.ofString()
+        );
+
+        if (response.statusCode() != 200) {
+            throw new IOException(
+                    "Unable to create game: "
+                            + response.statusCode()
+                            + " "
+                            + response.body()
+            );
+        }
+
+        CreateGameResult result =
+                gson.fromJson(response.body(), CreateGameResult.class);
+
+        return result.gameID();
     }
 }

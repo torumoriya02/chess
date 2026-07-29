@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ServerFacadeTests {
 
@@ -108,6 +109,32 @@ public class ServerFacadeTests {
         assertThrows(
                 Exception.class,
                 () -> facade.logout("bad-token")
+        );
+    }
+
+    @Test
+    void createGameSuccess() throws Exception {
+        var auth = facade.register(
+                "player1",
+                "password",
+                "player1@email.com"
+        );
+
+        int gameID = facade.createGame(
+                auth.authToken(),
+                "My Game"
+        );
+
+        assertTrue(gameID > 0);
+    }
+    @Test
+    void createGameFailure() {
+        assertThrows(
+                Exception.class,
+                () -> facade.createGame(
+                        "bad-token",
+                        "My Game"
+                )
         );
     }
 }
