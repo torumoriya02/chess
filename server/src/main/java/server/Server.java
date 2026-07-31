@@ -13,6 +13,7 @@ import service.JoinGameRequest;
 import service.LoginRequest;
 import service.RegisterRequest;
 import service.UserService;
+import websocket.WebSocketHandler;
 
 public class Server {
 
@@ -50,6 +51,21 @@ public class Server {
         registerClearRoute();
         registerUserRoutes();
         registerGameRoutes();
+        registerWebSocketRoute();
+    }
+
+    private void registerWebSocketRoute() {
+        WebSocketHandler webSocketHandler =
+                new WebSocketHandler(dataAccess);
+
+        javalin.ws("/ws", ws -> {
+            ws.onMessage(ctx ->
+                    webSocketHandler.onMessage(
+                            ctx,
+                            ctx.message()
+                    )
+            );
+        });
     }
 
     private void registerClearRoute() {
