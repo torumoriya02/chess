@@ -12,6 +12,8 @@ public class WebSocketHandler {
 
     private final DataAccess dataAccess;
     private final Gson gson = new Gson();
+    private final ConnectionManager connectionManager =
+            new ConnectionManager();
 
     public WebSocketHandler(DataAccess dataAccess) {
         this.dataAccess = dataAccess;
@@ -39,26 +41,57 @@ public class WebSocketHandler {
             UserGameCommand command
     ) throws Exception {
 
-        AuthData auth = dataAccess.getAuth(command.getAuthToken());
+        AuthData auth =
+                dataAccess.getAuth(command.getAuthToken());
 
         if (auth == null) {
             sendError(ctx, "Error: unauthorized");
             return;
         }
 
-        GameData game = dataAccess.getGame(command.getGameID());
+        GameData game =
+                dataAccess.getGame(command.getGameID());
 
         if (game == null) {
             sendError(ctx, "Error: game not found");
             return;
         }
 
-        ServerMessage response = ServerMessage.loadGame(game);
+        connectionManager.add(command.getGameID(), ctx);
 
-        ctx.send(gson.toJson(response));
+        ctx.send(
+                gson.toJson(
+                        ServerMessage.loadGame(game)
+                )
+        );
+
+        String notificationText =
+                auth.username() + " connected to the game.";
+
+        ServerMessage notification =
+                ServerMessage.notification(notificationText);
+
+        for (WsContext connection
+                : connectionManager.getConnections(
+                        command.getGameID()
+                )) {
+
+            if (connection != ctx) {
+                connection.send(
+                        gson.toJson(notification)
+                );
+            }
+        }
     }
 
-    private void sendError(WsContext ctx, String message) {
-        ctx.send(gson.toJson(ServerMessage.error(message)));
+    private void sendError(
+            WsContext ctx,
+            String message
+    ) {
+        ctx.send(
+                gson.toJson(
+                        ServerMessage.error(message)
+                )
+        );
     }
 }
