@@ -10,8 +10,6 @@ import model.AuthData;
 import model.GameData;
 import websocket.commands.UserGameCommand;
 import websocket.messages.ServerMessage;
-import chess.ChessGame;
-import chess.InvalidMoveException;
 
 public class WebSocketHandler {
 
@@ -32,7 +30,7 @@ public class WebSocketHandler {
             switch (command.getCommandType()) {
                 case CONNECT -> handleConnect(ctx, command);
                 case MAKE_MOVE -> handleMakeMove(ctx, command);
-                case LEAVE -> sendError(ctx, "Error: leave not implemented");
+                case LEAVE -> handleLeave(ctx, command);
                 case RESIGN -> sendError(ctx, "Error: resign not implemented");
             }
 
@@ -189,7 +187,12 @@ public class WebSocketHandler {
                 ),
                 ctx
         );
-    }
+
+        sendGameStatusNotifications(
+            command.getGameID(),
+            updatedGame
+        );
+        }
 
     private ChessGame.TeamColor getPlayerColor(
             String username,
@@ -219,5 +222,115 @@ public class WebSocketHandler {
                 connection.send(json);
             }
         }
+    }
+
+    private void sendGameStatusNotifications(
+            int gameID,
+            GameData gameData
+    ) {
+        ChessGame game = gameData.game();
+
+        ChessGame.TeamColor teamToMove = game.getTeamTurn();
+        String username = getUsernameForColor(teamToMove, gameData);
+
+        if (game.isInCheckmate(teamToMove)) {
+            broadcast(
+                    gameID,
+                    ServerMessage.notification(
+                            username + " is in checkmate."
+                    ),
+                    null
+            );
+            return;
+        }
+
+        if (game.isInStalemate(teamToMove)) {
+            broadcast(
+                    gameID,
+                    ServerMessage.notification(
+                            "The game is in stalemate."
+                    ),
+                    null
+            );
+            return;
+        }
+
+        if (game.isInCheck(teamToMove)) {
+            broadcast(
+                    gameID,
+                    ServerMessage.notification(
+                            username + " is in check."
+                    ),
+                    null
+            );
+        }
+    }
+
+    private String getUsernameForColor(
+                ChessGame.TeamColor color,
+                GameData gameData
+        ) {
+            if (color == ChessGame.TeamColor.WHITE) {
+                return gameData.whiteUsername() == null
+                        ? "White player"
+                        : gameData.whiteUsername();
+            }
+
+            return gameData.blackUsername() == null
+                    ? "Black player"
+                    : gameData.blackUsername();
+        }
+
+        private void handleLeave(
+            WsContext ctx,
+            UserGameCommand command
+    ) throws Exception {
+
+        AuthData auth = dataAccess.getAuth(command.getAuthToken());
+
+        if (auth == null) {
+            sendError(ctx, "Error: unauthorized");
+            return;
+        }
+
+        GameData game = dataAccess.getGame(command.getGameID());
+
+        if (game == null) {
+            sendError(ctx, "Error: game not found");
+            return;
+        }
+
+        String username = auth.username();
+
+        String whiteUsername = game.whiteUsername();
+        String blackUsername = game.blackUsername();
+
+        if (username.equals(whiteUsername)) {
+            whiteUsername = null;
+        }
+
+        if (username.equals(blackUsername)) {
+            blackUsername = null;
+        }
+
+        GameData updatedGame = new GameData(
+                game.gameID(),
+                whiteUsername,
+                blackUsername,
+                game.gameName(),
+                game.game()
+        );
+
+        dataAccess.updateGame(updatedGame);
+
+        connectionManager.remove(command.getGameID(), ctx);
+
+        broadcast(
+                command.getGameID(),
+                ServerMessage.notification(
+                        username + " left the game."
+                ),
+                null
+        );
     }
 }
