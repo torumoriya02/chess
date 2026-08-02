@@ -66,7 +66,7 @@ public class WebSocketHandler {
         );
 
         String notificationText =
-                auth.username() + " connected to the game.";
+            buildConnectNotification(auth, game);
 
         ServerMessage notification =
                 ServerMessage.notification(notificationText);
@@ -93,5 +93,22 @@ public class WebSocketHandler {
                         ServerMessage.error(message)
                 )
         );
+    }
+
+    private String buildConnectNotification(
+            AuthData auth,
+            GameData game
+    ) {
+        String username = auth.username();
+
+        if (username.equals(game.whiteUsername())) {
+            return username + " joined the game as WHITE.";
+        }
+
+        if (username.equals(game.blackUsername())) {
+            return username + " joined the game as BLACK.";
+        }
+
+        return username + " joined the game as an observer.";
     }
 }
