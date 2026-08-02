@@ -1,12 +1,17 @@
 package websocket;
 
 import com.google.gson.Gson;
+
+import chess.ChessGame;
+import chess.InvalidMoveException;
 import dataaccess.DataAccess;
 import io.javalin.websocket.WsContext;
 import model.AuthData;
 import model.GameData;
 import websocket.commands.UserGameCommand;
 import websocket.messages.ServerMessage;
+import chess.ChessGame;
+import chess.InvalidMoveException;
 
 public class WebSocketHandler {
 
@@ -24,11 +29,11 @@ public class WebSocketHandler {
             UserGameCommand command =
                     gson.fromJson(message, UserGameCommand.class);
 
-            if (command.getCommandType()
-                    == UserGameCommand.CommandType.CONNECT) {
-                handleConnect(ctx, command);
-            } else {
-                sendError(ctx, "Error: command not implemented");
+            switch (command.getCommandType()) {
+                case CONNECT -> handleConnect(ctx, command);
+                case MAKE_MOVE -> handleMakeMove(ctx, command);
+                case LEAVE -> sendError(ctx, "Error: leave not implemented");
+                case RESIGN -> sendError(ctx, "Error: resign not implemented");
             }
 
         } catch (Exception ex) {
@@ -110,5 +115,109 @@ public class WebSocketHandler {
         }
 
         return username + " joined the game as an observer.";
+    }
+
+    private void handleMakeMove(
+            WsContext ctx,
+            UserGameCommand command
+    ) throws Exception {
+
+        AuthData auth = dataAccess.getAuth(command.getAuthToken());
+
+        if (auth == null) {
+            sendError(ctx, "Error: unauthorized");
+            return;
+        }
+
+        GameData gameData = dataAccess.getGame(command.getGameID());
+
+        if (gameData == null) {
+            sendError(ctx, "Error: game not found");
+            return;
+        }
+
+        if (command.getMove() == null) {
+            sendError(ctx, "Error: move is required");
+            return;
+        }
+
+        String username = auth.username();
+        ChessGame game = gameData.game();
+        ChessGame.TeamColor playerColor =
+                getPlayerColor(username, gameData);
+
+        if (playerColor == null) {
+            sendError(ctx, "Error: observers cannot make moves");
+            return;
+        }
+
+        if (game.getTeamTurn() != playerColor) {
+            sendError(ctx, "Error: it is not your turn");
+            return;
+        }
+
+        try {
+            game.makeMove(command.getMove());
+        } catch (InvalidMoveException ex) {
+            sendError(ctx, "Error: invalid move");
+            return;
+        }
+
+        GameData updatedGame = new GameData(
+                gameData.gameID(),
+                gameData.whiteUsername(),
+                gameData.blackUsername(),
+                gameData.gameName(),
+                game
+        );
+
+        dataAccess.updateGame(updatedGame);
+
+        broadcast(
+                command.getGameID(),
+                ServerMessage.loadGame(updatedGame),
+                null
+        );
+
+        broadcast(
+                command.getGameID(),
+                ServerMessage.notification(
+                        username + " moved "
+                                + command.getMove().getStartPosition()
+                                + " to "
+                                + command.getMove().getEndPosition()
+                ),
+                ctx
+        );
+    }
+
+    private ChessGame.TeamColor getPlayerColor(
+            String username,
+            GameData game
+    ) {
+        if (username.equals(game.whiteUsername())) {
+            return ChessGame.TeamColor.WHITE;
+        }
+
+        if (username.equals(game.blackUsername())) {
+            return ChessGame.TeamColor.BLACK;
+        }
+
+        return null;
+    }
+    private void broadcast(
+            int gameID,
+            ServerMessage message,
+            WsContext excludedContext
+    ) {
+        String json = gson.toJson(message);
+
+        for (WsContext connection
+                : connectionManager.getConnections(gameID)) {
+
+            if (connection != excludedContext) {
+                connection.send(json);
+            }
+        }
     }
 }
