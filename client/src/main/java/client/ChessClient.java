@@ -2,16 +2,25 @@ package client;
 
 import chess.ChessGame;
 import model.GameData;
+import websocket.commands.UserGameCommand;
+import websocket.messages.ServerMessage;
 
 import java.util.Scanner;
 
-public class ChessClient {
+public class ChessClient implements NotificationHandler {
 
     private final Scanner scanner = new Scanner(System.in);
     private final ServerFacade facade;
+    private final String serverUrl;
 
     private String authToken;
     private GameData[] listedGames = new GameData[0];
+    private WebSocketCommunicator webSocket;
+
+    private Integer currentGameID;
+    private ChessGame.TeamColor boardPerspective =
+            ChessGame.TeamColor.WHITE;
+
     private State state = State.PRELOGIN;
 
     private enum State {
@@ -20,6 +29,7 @@ public class ChessClient {
     }
 
     public ChessClient(String serverUrl) {
+        this.serverUrl = serverUrl;
         this.facade = new ServerFacade(serverUrl);
     }
 
@@ -32,6 +42,7 @@ public class ChessClient {
             String input = scanner.nextLine().trim();
 
             if (input.equalsIgnoreCase("quit")) {
+                closeWebSocket();
                 System.out.println("Goodbye!");
                 return;
             }
@@ -100,12 +111,18 @@ public class ChessClient {
             String password = scanner.nextLine().trim();
 
             var result = facade.login(username, password);
+
             authToken = result.authToken();
             state = State.POSTLOGIN;
 
-            System.out.println("Logged in as " + result.username());
+            System.out.println(
+                    "Logged in as " + result.username()
+            );
+
         } catch (Exception ex) {
-            System.out.println("Unable to log in. Check your username and password.");
+            System.out.println(
+                    "Unable to log in. Check your username and password."
+            );
         }
     }
 
@@ -120,25 +137,37 @@ public class ChessClient {
             System.out.print("Email: ");
             String email = scanner.nextLine().trim();
 
-            var result = facade.register(username, password, email);
+            var result =
+                    facade.register(username, password, email);
+
             authToken = result.authToken();
             state = State.POSTLOGIN;
 
-            System.out.println("Registered and logged in as " + result.username());
+            System.out.println(
+                    "Registered and logged in as "
+                            + result.username()
+            );
+
         } catch (Exception ex) {
-            System.out.println("Unable to register. Please check your information.");
+            System.out.println(
+                    "Unable to register. Please check your information."
+            );
         }
     }
 
     private void logout() {
         try {
+            closeWebSocket();
+
             facade.logout(authToken);
 
             authToken = null;
             listedGames = new GameData[0];
+            currentGameID = null;
             state = State.PRELOGIN;
 
             System.out.println("Logged out.");
+
         } catch (Exception ex) {
             System.out.println("Unable to log out.");
         }
@@ -150,12 +179,15 @@ public class ChessClient {
             String gameName = scanner.nextLine().trim();
 
             if (gameName.isBlank()) {
-                System.out.println("Game name cannot be empty.");
+                System.out.println(
+                        "Game name cannot be empty."
+                );
                 return;
             }
 
             facade.createGame(authToken, gameName);
             System.out.println("Game created.");
+
         } catch (Exception ex) {
             System.out.println("Unable to create game.");
         }
@@ -165,7 +197,9 @@ public class ChessClient {
         try {
             listedGames = facade.listGames(authToken);
 
-            if (listedGames == null || listedGames.length == 0) {
+            if (listedGames == null
+                    || listedGames.length == 0) {
+
                 listedGames = new GameData[0];
                 System.out.println("No games available.");
                 return;
@@ -174,13 +208,15 @@ public class ChessClient {
             for (int i = 0; i < listedGames.length; i++) {
                 GameData game = listedGames[i];
 
-                String white = game.whiteUsername() == null
-                        ? "available"
-                        : game.whiteUsername();
+                String white =
+                        game.whiteUsername() == null
+                                ? "available"
+                                : game.whiteUsername();
 
-                String black = game.blackUsername() == null
-                        ? "available"
-                        : game.blackUsername();
+                String black =
+                        game.blackUsername() == null
+                                ? "available"
+                                : game.blackUsername();
 
                 System.out.printf(
                         "%d. %s | White: %s | Black: %s%n",
@@ -190,6 +226,7 @@ public class ChessClient {
                         black
                 );
             }
+
         } catch (Exception ex) {
             System.out.println("Unable to list games.");
         }
@@ -203,20 +240,29 @@ public class ChessClient {
             }
 
             System.out.print("Game number: ");
-            int gameNumber = Integer.parseInt(scanner.nextLine().trim());
+            int gameNumber =
+                    Integer.parseInt(
+                            scanner.nextLine().trim()
+                    );
 
-            if (gameNumber < 1 || gameNumber > listedGames.length) {
+            if (gameNumber < 1
+                    || gameNumber > listedGames.length) {
+
                 System.out.println("Invalid game number.");
                 return;
             }
 
             System.out.print("Color (WHITE or BLACK): ");
-            String colorInput = scanner.nextLine().trim().toUpperCase();
+            String colorInput =
+                    scanner.nextLine()
+                            .trim()
+                            .toUpperCase();
 
             ChessGame.TeamColor color =
                     ChessGame.TeamColor.valueOf(colorInput);
 
-            GameData selectedGame = listedGames[gameNumber - 1];
+            GameData selectedGame =
+                    listedGames[gameNumber - 1];
 
             facade.joinGame(
                     authToken,
@@ -224,20 +270,33 @@ public class ChessClient {
                     color
             );
 
+            currentGameID = selectedGame.gameID();
+            boardPerspective = color;
+
+            connectToGame();
+
             System.out.println(
-                    "Joined " + selectedGame.gameName()
-                            + " as " + color
+                    "Joined "
+                            + selectedGame.gameName()
+                            + " as "
+                            + color
             );
 
-            ChessGame initialGame = new ChessGame();
-            BoardDrawer.draw(initialGame.getBoard(), color);
-
         } catch (NumberFormatException ex) {
-            System.out.println("Game number must be a number.");
+            System.out.println(
+                    "Game number must be a number."
+            );
+
         } catch (IllegalArgumentException ex) {
-            System.out.println("Color must be WHITE or BLACK.");
+            System.out.println(
+                    "Color must be WHITE or BLACK."
+            );
+
         } catch (Exception ex) {
-            System.out.println("Unable to join game.");
+            System.out.println(
+                    "Unable to join game: "
+                            + ex.getMessage()
+            );
         }
     }
 
@@ -249,28 +308,120 @@ public class ChessClient {
             }
 
             System.out.print("Game number: ");
-            int gameNumber = Integer.parseInt(scanner.nextLine().trim());
+            int gameNumber =
+                    Integer.parseInt(
+                            scanner.nextLine().trim()
+                    );
 
-            if (gameNumber < 1 || gameNumber > listedGames.length) {
+            if (gameNumber < 1
+                    || gameNumber > listedGames.length) {
+
                 System.out.println("Invalid game number.");
                 return;
             }
 
-            GameData selectedGame = listedGames[gameNumber - 1];
+            GameData selectedGame =
+                    listedGames[gameNumber - 1];
 
-            System.out.println("Observing " + selectedGame.gameName());
+            currentGameID = selectedGame.gameID();
+            boardPerspective = ChessGame.TeamColor.WHITE;
 
-            ChessGame initialGame = new ChessGame();
+            connectToGame();
 
-            BoardDrawer.draw(
-                    initialGame.getBoard(),
-                    ChessGame.TeamColor.WHITE
+            System.out.println(
+                    "Observing "
+                            + selectedGame.gameName()
             );
 
         } catch (NumberFormatException ex) {
-            System.out.println("Game number must be a number.");
+            System.out.println(
+                    "Game number must be a number."
+            );
+
         } catch (Exception ex) {
-            System.out.println("Unable to observe game.");
+            System.out.println(
+                    "Unable to observe game: "
+                            + ex.getMessage()
+            );
         }
+    }
+
+    private void connectToGame() throws Exception {
+        closeWebSocket();
+
+        webSocket =
+                new WebSocketCommunicator(
+                        serverUrl,
+                        this
+                );
+
+        UserGameCommand connectCommand =
+                new UserGameCommand(
+                        UserGameCommand.CommandType.CONNECT,
+                        authToken,
+                        currentGameID
+                );
+
+        webSocket.sendCommand(connectCommand);
+    }
+
+    private void closeWebSocket() {
+        if (webSocket == null) {
+            return;
+        }
+
+        try {
+            webSocket.close();
+        } catch (Exception ignored) {
+            // The connection may already be closed.
+        }
+
+        webSocket = null;
+    }
+
+    @Override
+    public void notify(ServerMessage message) {
+        if (message == null
+                || message.getServerMessageType() == null) {
+
+            System.out.println(
+                    "\nReceived an invalid server message."
+            );
+            return;
+        }
+
+        switch (message.getServerMessageType()) {
+            case LOAD_GAME -> handleLoadGame(message);
+            case NOTIFICATION -> {
+                System.out.println(
+                        "\n" + message.getMessage()
+                );
+            }
+            case ERROR -> {
+                System.out.println(
+                        "\n" + message.getErrorMessage()
+                );
+            }
+        }
+
+        System.out.print(">>> ");
+    }
+
+    private void handleLoadGame(ServerMessage message) {
+        GameData gameData = message.getGame();
+
+        if (gameData == null || gameData.game() == null) {
+            System.out.println(
+                    "\nUnable to load game."
+            );
+            return;
+        }
+
+        System.out.println();
+
+        BoardDrawer.draw(
+                gameData.game().getBoard(),
+                boardPerspective
+        );
     }
 }
