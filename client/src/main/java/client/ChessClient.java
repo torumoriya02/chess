@@ -18,6 +18,8 @@ public class ChessClient implements NotificationHandler {
     private WebSocketCommunicator webSocket;
 
     private Integer currentGameID;
+    private GameData currentGame;
+
     private ChessGame.TeamColor boardPerspective =
             ChessGame.TeamColor.WHITE;
 
@@ -92,11 +94,11 @@ public class ChessClient implements NotificationHandler {
         if (input.equalsIgnoreCase("help")) {
             printGameplayHelp();
         } else if (input.equalsIgnoreCase("redraw")) {
-            System.out.println("Redraw will be implemented next.");
+            redrawBoard();
         } else if (input.equalsIgnoreCase("move")) {
             System.out.println("Move will be implemented next.");
         } else if (input.equalsIgnoreCase("resign")) {
-            System.out.println("Resign will be implemented next.");
+            resignGame();
         } else if (input.equalsIgnoreCase("leave")) {
             leaveGame();
         } else {
@@ -192,6 +194,7 @@ public class ChessClient implements NotificationHandler {
             authToken = null;
             listedGames = new GameData[0];
             currentGameID = null;
+            currentGame = null;
             state = State.PRELOGIN;
 
             System.out.println("Logged out.");
@@ -299,6 +302,7 @@ public class ChessClient implements NotificationHandler {
             );
 
             currentGameID = selectedGame.gameID();
+            currentGame = null;
             boardPerspective = color;
 
             connectToGame();
@@ -353,6 +357,7 @@ public class ChessClient implements NotificationHandler {
                     listedGames[gameNumber - 1];
 
             currentGameID = selectedGame.gameID();
+            currentGame = null;
             boardPerspective = ChessGame.TeamColor.WHITE;
 
             connectToGame();
@@ -371,6 +376,62 @@ public class ChessClient implements NotificationHandler {
         } catch (Exception ex) {
             System.out.println(
                     "Unable to observe game: "
+                            + ex.getMessage()
+            );
+        }
+    }
+
+    private void redrawBoard() {
+        if (currentGame == null
+                || currentGame.game() == null) {
+
+            System.out.println(
+                    "No game is currently loaded."
+            );
+            return;
+        }
+
+        BoardDrawer.draw(
+                currentGame.game().getBoard(),
+                boardPerspective
+        );
+    }
+
+    private void resignGame() {
+        if (webSocket == null || currentGameID == null) {
+            System.out.println(
+                    "You are not currently in a game."
+            );
+            return;
+        }
+
+        System.out.print(
+                "Are you sure you want to resign? (yes/no): "
+        );
+
+        String confirmation =
+                scanner.nextLine().trim();
+
+        if (!confirmation.equalsIgnoreCase("yes")) {
+            System.out.println("Resignation canceled.");
+            return;
+        }
+
+        try {
+            UserGameCommand resignCommand =
+                    new UserGameCommand(
+                            UserGameCommand.CommandType.RESIGN,
+                            authToken,
+                            currentGameID
+                    );
+
+            webSocket.sendCommand(resignCommand);
+
+            System.out.println("You resigned the game.");
+
+        } catch (Exception ex) {
+            System.out.println(
+                    "Unable to resign: "
                             + ex.getMessage()
             );
         }
@@ -396,6 +457,7 @@ public class ChessClient implements NotificationHandler {
             closeWebSocket();
 
             currentGameID = null;
+            currentGame = null;
             boardPerspective = ChessGame.TeamColor.WHITE;
             state = State.POSTLOGIN;
 
@@ -478,10 +540,12 @@ public class ChessClient implements NotificationHandler {
             return;
         }
 
+        currentGame = gameData;
+
         System.out.println();
 
         BoardDrawer.draw(
-                gameData.game().getBoard(),
+                currentGame.game().getBoard(),
                 boardPerspective
         );
     }
