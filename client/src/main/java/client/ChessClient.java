@@ -6,6 +6,9 @@ import websocket.commands.UserGameCommand;
 import websocket.messages.ServerMessage;
 
 import java.util.Scanner;
+import chess.ChessMove;
+import chess.ChessPiece;
+import chess.ChessPosition;
 
 public class ChessClient implements NotificationHandler {
 
@@ -96,7 +99,7 @@ public class ChessClient implements NotificationHandler {
         } else if (input.equalsIgnoreCase("redraw")) {
             redrawBoard();
         } else if (input.equalsIgnoreCase("move")) {
-            System.out.println("Move will be implemented next.");
+            makeMove();
         } else if (input.equalsIgnoreCase("resign")) {
             resignGame();
         } else if (input.equalsIgnoreCase("leave")) {
@@ -548,5 +551,117 @@ public class ChessClient implements NotificationHandler {
                 currentGame.game().getBoard(),
                 boardPerspective
         );
+    }
+
+    private void makeMove() {
+        if (webSocket == null || currentGameID == null) {
+            System.out.println("You are not currently in a game.");
+            return;
+        }
+
+        try {
+            System.out.print("Start position, for example e2: ");
+            ChessPosition start =
+                    parsePosition(scanner.nextLine().trim());
+
+            System.out.print("End position, for example e4: ");
+            ChessPosition end =
+                    parsePosition(scanner.nextLine().trim());
+
+            ChessPiece.PieceType promotion = null;
+
+            if (isPromotionMove(start, end)) {
+                System.out.print(
+                        "Promotion piece "
+                                + "(QUEEN, ROOK, BISHOP, KNIGHT): "
+                );
+
+                String promotionInput =
+                        scanner.nextLine().trim().toUpperCase();
+
+                promotion =
+                        ChessPiece.PieceType.valueOf(promotionInput);
+
+                if (promotion == ChessPiece.PieceType.KING
+                        || promotion == ChessPiece.PieceType.PAWN) {
+
+                    System.out.println(
+                            "Promotion must be QUEEN, ROOK, "
+                                    + "BISHOP, or KNIGHT."
+                    );
+                    return;
+                }
+            }
+
+            ChessMove move =
+                    new ChessMove(start, end, promotion);
+
+            UserGameCommand command =
+                    new UserGameCommand(
+                            UserGameCommand.CommandType.MAKE_MOVE,
+                            authToken,
+                            currentGameID,
+                            move
+                    );
+
+            webSocket.sendCommand(command);
+
+        } catch (IllegalArgumentException ex) {
+            System.out.println(
+                    "Invalid position or promotion piece."
+            );
+
+        } catch (Exception ex) {
+            System.out.println(
+                    "Unable to make move: " + ex.getMessage()
+            );
+        }
+    }
+
+    private ChessPosition parsePosition(String input) {
+        if (input == null || input.length() != 2) {
+            throw new IllegalArgumentException(
+                    "Position must contain two characters"
+            );
+        }
+
+        char file = Character.toLowerCase(input.charAt(0));
+        char rank = input.charAt(1);
+
+        if (file < 'a' || file > 'h'
+                || rank < '1' || rank > '8') {
+
+            throw new IllegalArgumentException(
+                    "Position is outside the board"
+            );
+        }
+
+        int column = file - 'a' + 1;
+        int row = rank - '0';
+
+        return new ChessPosition(row, column);
+    }
+
+    private boolean isPromotionMove(
+            ChessPosition start,
+            ChessPosition end
+    ) {
+        if (currentGame == null || currentGame.game() == null) {
+            return false;
+        }
+
+        ChessPiece piece =
+                currentGame.game()
+                        .getBoard()
+                        .getPiece(start);
+
+        if (piece == null
+                || piece.getPieceType()
+                != ChessPiece.PieceType.PAWN) {
+
+            return false;
+        }
+
+        return end.getRow() == 1 || end.getRow() == 8;
     }
 }
