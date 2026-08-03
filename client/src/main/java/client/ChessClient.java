@@ -9,6 +9,9 @@ import java.util.Scanner;
 import chess.ChessMove;
 import chess.ChessPiece;
 import chess.ChessPosition;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Set;
 
 public class ChessClient implements NotificationHandler {
 
@@ -98,6 +101,8 @@ public class ChessClient implements NotificationHandler {
             printGameplayHelp();
         } else if (input.equalsIgnoreCase("redraw")) {
             redrawBoard();
+        } else if (input.equalsIgnoreCase("highlight")) {
+            highlightMoves();
         } else if (input.equalsIgnoreCase("move")) {
             makeMove();
         } else if (input.equalsIgnoreCase("resign")) {
@@ -129,6 +134,7 @@ public class ChessClient implements NotificationHandler {
     private void printGameplayHelp() {
         System.out.println("help   - show gameplay commands");
         System.out.println("redraw - redraw the chess board");
+        System.out.println("highlight - show legal moves for a piece");
         System.out.println("move   - make a chess move");
         System.out.println("resign - resign the game");
         System.out.println("leave  - leave the game");
@@ -663,5 +669,67 @@ public class ChessClient implements NotificationHandler {
         }
 
         return end.getRow() == 1 || end.getRow() == 8;
+    }
+
+    private void highlightMoves() {
+        if (currentGame == null
+                || currentGame.game() == null) {
+
+            System.out.println(
+                    "No game is currently loaded."
+            );
+            return;
+        }
+
+        try {
+            System.out.print(
+                    "Piece position, for example e2: "
+            );
+
+            ChessPosition startPosition =
+                    parsePosition(
+                            scanner.nextLine().trim()
+                    );
+
+            Collection<ChessMove> validMoves =
+                    currentGame.game()
+                            .validMoves(startPosition);
+
+            if (validMoves == null) {
+                System.out.println(
+                        "There is no piece at that position."
+                );
+                return;
+            }
+
+            if (validMoves.isEmpty()) {
+                System.out.println(
+                        "That piece has no legal moves."
+                );
+                return;
+            }
+
+            Set<ChessPosition> highlightedPositions =
+                    new HashSet<>();
+
+            highlightedPositions.add(startPosition);
+
+            for (ChessMove move : validMoves) {
+                highlightedPositions.add(
+                        move.getEndPosition()
+                );
+            }
+
+            BoardDrawer.draw(
+                    currentGame.game().getBoard(),
+                    boardPerspective,
+                    highlightedPositions
+            );
+
+        } catch (IllegalArgumentException ex) {
+            System.out.println(
+                    "Invalid position. Use a square such as e2."
+            );
+        }
     }
 }
