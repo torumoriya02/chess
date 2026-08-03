@@ -98,7 +98,7 @@ public class ChessClient implements NotificationHandler {
         } else if (input.equalsIgnoreCase("resign")) {
             System.out.println("Resign will be implemented next.");
         } else if (input.equalsIgnoreCase("leave")) {
-            System.out.println("Leave will be implemented next.");
+            leaveGame();
         } else {
             System.out.println("Unknown command. Type help.");
         }
@@ -376,6 +376,39 @@ public class ChessClient implements NotificationHandler {
         }
     }
 
+    private void leaveGame() {
+        if (webSocket == null || currentGameID == null) {
+            System.out.println(
+                    "You are not currently in a game."
+            );
+            return;
+        }
+
+        try {
+            UserGameCommand leaveCommand =
+                    new UserGameCommand(
+                            UserGameCommand.CommandType.LEAVE,
+                            authToken,
+                            currentGameID
+                    );
+
+            webSocket.sendCommand(leaveCommand);
+            closeWebSocket();
+
+            currentGameID = null;
+            boardPerspective = ChessGame.TeamColor.WHITE;
+            state = State.POSTLOGIN;
+
+            System.out.println("You left the game.");
+
+        } catch (Exception ex) {
+            System.out.println(
+                    "Unable to leave game: "
+                            + ex.getMessage()
+            );
+        }
+    }
+
     private void connectToGame() throws Exception {
         closeWebSocket();
 
@@ -422,16 +455,14 @@ public class ChessClient implements NotificationHandler {
 
         switch (message.getServerMessageType()) {
             case LOAD_GAME -> handleLoadGame(message);
-            case NOTIFICATION -> {
-                System.out.println(
-                        "\n" + message.getMessage()
-                );
-            }
-            case ERROR -> {
-                System.out.println(
-                        "\n" + message.getErrorMessage()
-                );
-            }
+
+            case NOTIFICATION -> System.out.println(
+                    "\n" + message.getMessage()
+            );
+
+            case ERROR -> System.out.println(
+                    "\n" + message.getErrorMessage()
+            );
         }
 
         System.out.print(">>> ");
