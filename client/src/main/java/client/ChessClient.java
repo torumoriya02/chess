@@ -25,7 +25,8 @@ public class ChessClient implements NotificationHandler {
 
     private enum State {
         PRELOGIN,
-        POSTLOGIN
+        POSTLOGIN,
+        GAMEPLAY
     }
 
     public ChessClient(String serverUrl) {
@@ -49,8 +50,10 @@ public class ChessClient implements NotificationHandler {
 
             if (state == State.PRELOGIN) {
                 handlePreloginCommand(input);
-            } else {
+            } else if (state == State.POSTLOGIN) {
                 handlePostloginCommand(input);
+            } else {
+                handleGameplayCommand(input);
             }
         }
     }
@@ -85,6 +88,22 @@ public class ChessClient implements NotificationHandler {
         }
     }
 
+    private void handleGameplayCommand(String input) {
+        if (input.equalsIgnoreCase("help")) {
+            printGameplayHelp();
+        } else if (input.equalsIgnoreCase("redraw")) {
+            System.out.println("Redraw will be implemented next.");
+        } else if (input.equalsIgnoreCase("move")) {
+            System.out.println("Move will be implemented next.");
+        } else if (input.equalsIgnoreCase("resign")) {
+            System.out.println("Resign will be implemented next.");
+        } else if (input.equalsIgnoreCase("leave")) {
+            System.out.println("Leave will be implemented next.");
+        } else {
+            System.out.println("Unknown command. Type help.");
+        }
+    }
+
     private void printPreloginHelp() {
         System.out.println("help     - show available commands");
         System.out.println("login    - log in to your account");
@@ -100,6 +119,15 @@ public class ChessClient implements NotificationHandler {
         System.out.println("play game    - join a game");
         System.out.println("observe game - observe a game");
         System.out.println("quit         - exit the program");
+    }
+
+    private void printGameplayHelp() {
+        System.out.println("help   - show gameplay commands");
+        System.out.println("redraw - redraw the chess board");
+        System.out.println("move   - make a chess move");
+        System.out.println("resign - resign the game");
+        System.out.println("leave  - leave the game");
+        System.out.println("quit   - exit the program");
     }
 
     private void login() {
@@ -274,6 +302,7 @@ public class ChessClient implements NotificationHandler {
             boardPerspective = color;
 
             connectToGame();
+            state = State.GAMEPLAY;
 
             System.out.println(
                     "Joined "
@@ -327,6 +356,7 @@ public class ChessClient implements NotificationHandler {
             boardPerspective = ChessGame.TeamColor.WHITE;
 
             connectToGame();
+            state = State.GAMEPLAY;
 
             System.out.println(
                     "Observing "
