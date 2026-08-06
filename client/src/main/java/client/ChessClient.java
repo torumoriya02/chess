@@ -1,19 +1,11 @@
 package client;
 
 import chess.ChessGame;
-import chess.ChessMove;
-import chess.ChessPiece;
-import chess.ChessPosition;
 import model.GameData;
-import websocket.commands.UserGameCommand;
-import websocket.messages.ServerMessage;
 
-import java.util.Collection;
-import java.util.HashSet;
 import java.util.Scanner;
-import java.util.Set;
 
-public class ChessClient implements NotificationHandler {
+public class ChessClient {
 
     private final Scanner scanner = new Scanner(System.in);
     private final ServerFacade facade;
@@ -21,20 +13,12 @@ public class ChessClient implements NotificationHandler {
 
     private String authToken;
     private GameData[] listedGames = new GameData[0];
-    private WebSocketCommunicator webSocket;
-
-    private Integer currentGameID;
-    private GameData currentGame;
-
-    private ChessGame.TeamColor boardPerspective =
-            ChessGame.TeamColor.WHITE;
-
     private State state = State.PRELOGIN;
+    private boolean shouldQuit;
 
     private enum State {
         PRELOGIN,
-        POSTLOGIN,
-        GAMEPLAY
+        POSTLOGIN
     }
 
     public ChessClient(String serverUrl) {
@@ -46,24 +30,20 @@ public class ChessClient implements NotificationHandler {
         System.out.println("♕ 240 Chess Client");
         System.out.println("Type help to see available commands.");
 
-        while (true) {
+        while (!shouldQuit) {
             System.out.print(">>> ");
             String input = scanner.nextLine().trim();
 
             if (input.equalsIgnoreCase("quit")) {
-                closeWebSocket();
-                System.out.println("Goodbye!");
-                return;
-            }
-
-            if (state == State.PRELOGIN) {
+                shouldQuit = true;
+            } else if (state == State.PRELOGIN) {
                 handlePreloginCommand(input);
-            } else if (state == State.POSTLOGIN) {
-                handlePostloginCommand(input);
             } else {
-                handleGameplayCommand(input);
+                handlePostloginCommand(input);
             }
         }
+
+        System.out.println("Goodbye!");
     }
 
     private void handlePreloginCommand(String input) {
@@ -96,24 +76,6 @@ public class ChessClient implements NotificationHandler {
         }
     }
 
-    private void handleGameplayCommand(String input) {
-        if (input.equalsIgnoreCase("help")) {
-            printGameplayHelp();
-        } else if (input.equalsIgnoreCase("redraw")) {
-            redrawBoard();
-        } else if (input.equalsIgnoreCase("highlight")) {
-            highlightMoves();
-        } else if (input.equalsIgnoreCase("move")) {
-            makeMove();
-        } else if (input.equalsIgnoreCase("resign")) {
-            resignGame();
-        } else if (input.equalsIgnoreCase("leave")) {
-            leaveGame();
-        } else {
-            System.out.println("Unknown command. Type help.");
-        }
-    }
-
     private void printPreloginHelp() {
         System.out.println("help     - show available commands");
         System.out.println("login    - log in to your account");
@@ -131,16 +93,6 @@ public class ChessClient implements NotificationHandler {
         System.out.println("quit         - exit the program");
     }
 
-    private void printGameplayHelp() {
-        System.out.println("help      - show gameplay commands");
-        System.out.println("redraw    - redraw the chess board");
-        System.out.println("highlight - show legal moves for a piece");
-        System.out.println("move      - make a chess move");
-        System.out.println("resign    - resign the game");
-        System.out.println("leave     - leave the game");
-        System.out.println("quit      - exit the program");
-    }
-
     private void login() {
         try {
             System.out.print("Username: ");
@@ -154,10 +106,7 @@ public class ChessClient implements NotificationHandler {
             authToken = result.authToken();
             state = State.POSTLOGIN;
 
-            System.out.println(
-                    "Logged in as " + result.username()
-            );
-
+            System.out.println("Logged in as " + result.username());
         } catch (Exception ex) {
             System.out.println(
                     "Unable to log in. Check your username and password."
@@ -176,8 +125,11 @@ public class ChessClient implements NotificationHandler {
             System.out.print("Email: ");
             String email = scanner.nextLine().trim();
 
-            var result =
-                    facade.register(username, password, email);
+            var result = facade.register(
+                    username,
+                    password,
+                    email
+            );
 
             authToken = result.authToken();
             state = State.POSTLOGIN;
@@ -186,7 +138,6 @@ public class ChessClient implements NotificationHandler {
                     "Registered and logged in as "
                             + result.username()
             );
-
         } catch (Exception ex) {
             System.out.println(
                     "Unable to register. Please check your information."
@@ -196,17 +147,13 @@ public class ChessClient implements NotificationHandler {
 
     private void logout() {
         try {
-            closeWebSocket();
             facade.logout(authToken);
 
             authToken = null;
             listedGames = new GameData[0];
-            currentGameID = null;
-            currentGame = null;
             state = State.PRELOGIN;
 
             System.out.println("Logged out.");
-
         } catch (Exception ex) {
             System.out.println("Unable to log out.");
         }
@@ -224,7 +171,6 @@ public class ChessClient implements NotificationHandler {
 
             facade.createGame(authToken, gameName);
             System.out.println("Game created.");
-
         } catch (Exception ex) {
             System.out.println("Unable to create game.");
         }
@@ -234,85 +180,61 @@ public class ChessClient implements NotificationHandler {
         try {
             listedGames = facade.listGames(authToken);
 
-            if (listedGames == null
-                    || listedGames.length == 0) {
-
+            if (listedGames == null || listedGames.length == 0) {
                 listedGames = new GameData[0];
                 System.out.println("No games available.");
                 return;
             }
 
-            for (int i = 0; i < listedGames.length; i++) {
-                GameData game = listedGames[i];
-
-                String white =
-                        game.whiteUsername() == null
-                                ? "available"
-                                : game.whiteUsername();
-
-                String black =
-                        game.blackUsername() == null
-                                ? "available"
-                                : game.blackUsername();
-
-                System.out.printf(
-                        "%d. %s | White: %s | Black: %s%n",
-                        i + 1,
-                        game.gameName(),
-                        white,
-                        black
-                );
-            }
-
+            printListedGames();
         } catch (Exception ex) {
             System.out.println("Unable to list games.");
         }
     }
 
+    private void printListedGames() {
+        for (int index = 0; index < listedGames.length; index++) {
+            GameData game = listedGames[index];
+
+            String white = displayUsername(
+                    game.whiteUsername()
+            );
+
+            String black = displayUsername(
+                    game.blackUsername()
+            );
+
+            System.out.printf(
+                    "%d. %s | White: %s | Black: %s%n",
+                    index + 1,
+                    game.gameName(),
+                    white,
+                    black
+            );
+        }
+    }
+
+    private String displayUsername(String username) {
+        return username == null
+                ? "available"
+                : username;
+    }
+
     private void playGame() {
         try {
-            if (listedGames.length == 0) {
-                System.out.println("List games first.");
+            GameData selectedGame = selectGame();
+
+            if (selectedGame == null) {
                 return;
             }
 
-            System.out.print("Game number: ");
-            int gameNumber =
-                    Integer.parseInt(
-                            scanner.nextLine().trim()
-                    );
-
-            if (gameNumber < 1
-                    || gameNumber > listedGames.length) {
-
-                System.out.println("Invalid game number.");
-                return;
-            }
-
-            System.out.print("Color (WHITE or BLACK): ");
-            String colorInput =
-                    scanner.nextLine()
-                            .trim()
-                            .toUpperCase();
-
-            ChessGame.TeamColor color =
-                    ChessGame.TeamColor.valueOf(colorInput);
-
-            GameData selectedGame =
-                    listedGames[gameNumber - 1];
+            ChessGame.TeamColor color = selectColor();
 
             facade.joinGame(
                     authToken,
                     selectedGame.gameID(),
                     color
             );
-
-            currentGameID = selectedGame.gameID();
-            currentGame = null;
-            boardPerspective = color;
-
-            connectToGame();
-            state = State.GAMEPLAY;
 
             System.out.println(
                     "Joined "
@@ -321,16 +243,9 @@ public class ChessClient implements NotificationHandler {
                             + color
             );
 
-        } catch (NumberFormatException ex) {
-            System.out.println(
-                    "Game number must be a number."
-            );
-
+            enterGameplay(selectedGame, color);
         } catch (IllegalArgumentException ex) {
-            System.out.println(
-                    "Color must be WHITE or BLACK."
-            );
-
+            System.out.println("Color must be WHITE or BLACK.");
         } catch (Exception ex) {
             System.out.println(
                     "Unable to join game: "
@@ -341,44 +256,21 @@ public class ChessClient implements NotificationHandler {
 
     private void observeGame() {
         try {
-            if (listedGames.length == 0) {
-                System.out.println("List games first.");
+            GameData selectedGame = selectGame();
+
+            if (selectedGame == null) {
                 return;
             }
-
-            System.out.print("Game number: ");
-            int gameNumber =
-                    Integer.parseInt(
-                            scanner.nextLine().trim()
-                    );
-
-            if (gameNumber < 1
-                    || gameNumber > listedGames.length) {
-
-                System.out.println("Invalid game number.");
-                return;
-            }
-
-            GameData selectedGame =
-                    listedGames[gameNumber - 1];
-
-            currentGameID = selectedGame.gameID();
-            currentGame = null;
-            boardPerspective = ChessGame.TeamColor.WHITE;
-
-            connectToGame();
-            state = State.GAMEPLAY;
 
             System.out.println(
                     "Observing "
                             + selectedGame.gameName()
             );
 
-        } catch (NumberFormatException ex) {
-            System.out.println(
-                    "Game number must be a number."
+            enterGameplay(
+                    selectedGame,
+                    ChessGame.TeamColor.WHITE
             );
-
         } catch (Exception ex) {
             System.out.println(
                     "Unable to observe game: "
@@ -387,370 +279,59 @@ public class ChessClient implements NotificationHandler {
         }
     }
 
-    private void redrawBoard() {
-        if (currentGame == null
-                || currentGame.game() == null) {
-
-            System.out.println(
-                    "No game is currently loaded."
-            );
-            return;
+    private GameData selectGame() {
+        if (listedGames.length == 0) {
+            System.out.println("List games first.");
+            return null;
         }
 
-        BoardDrawer.draw(
-                currentGame.game().getBoard(),
-                boardPerspective
-        );
-    }
-
-    private void highlightMoves() {
-        if (currentGame == null
-                || currentGame.game() == null) {
-
-            System.out.println(
-                    "No game is currently loaded."
-            );
-            return;
-        }
+        System.out.print("Game number: ");
 
         try {
-            System.out.print(
-                    "Piece position, for example e2: "
+            int gameNumber = Integer.parseInt(
+                    scanner.nextLine().trim()
             );
 
-            ChessPosition startPosition =
-                    parsePosition(
-                            scanner.nextLine().trim()
-                    );
+            if (gameNumber < 1
+                    || gameNumber > listedGames.length) {
 
-            Collection<ChessMove> validMoves =
-                    currentGame.game()
-                            .validMoves(startPosition);
-
-            if (validMoves == null) {
-                System.out.println(
-                        "There is no piece at that position."
-                );
-                return;
+                System.out.println("Invalid game number.");
+                return null;
             }
 
-            if (validMoves.isEmpty()) {
-                System.out.println(
-                        "That piece has no legal moves."
-                );
-                return;
-            }
-
-            Set<ChessPosition> highlightedPositions =
-                    new HashSet<>();
-
-            highlightedPositions.add(startPosition);
-
-            for (ChessMove move : validMoves) {
-                highlightedPositions.add(
-                        move.getEndPosition()
-                );
-            }
-
-            BoardDrawer.draw(
-                    currentGame.game().getBoard(),
-                    boardPerspective,
-                    highlightedPositions
-            );
-
-        } catch (IllegalArgumentException ex) {
+            return listedGames[gameNumber - 1];
+        } catch (NumberFormatException ex) {
             System.out.println(
-                    "Invalid position. Use a square such as e2."
+                    "Game number must be a number."
             );
+            return null;
         }
     }
 
-    private void makeMove() {
-        if (webSocket == null || currentGameID == null) {
-            System.out.println(
-                    "You are not currently in a game."
-            );
-            return;
-        }
+    private ChessGame.TeamColor selectColor() {
+        System.out.print("Color (WHITE or BLACK): ");
 
-        try {
-            System.out.print(
-                    "Start position, for example e2: "
-            );
+        String input = scanner.nextLine()
+                .trim()
+                .toUpperCase();
 
-            ChessPosition start =
-                    parsePosition(
-                            scanner.nextLine().trim()
-                    );
-
-            System.out.print(
-                    "End position, for example e4: "
-            );
-
-            ChessPosition end =
-                    parsePosition(
-                            scanner.nextLine().trim()
-                    );
-
-            ChessPiece.PieceType promotion = null;
-
-            if (isPromotionMove(start, end)) {
-                System.out.print(
-                        "Promotion piece "
-                                + "(QUEEN, ROOK, BISHOP, KNIGHT): "
-                );
-
-                String promotionInput =
-                        scanner.nextLine()
-                                .trim()
-                                .toUpperCase();
-
-                promotion =
-                        ChessPiece.PieceType.valueOf(
-                                promotionInput
-                        );
-
-                if (promotion == ChessPiece.PieceType.KING
-                        || promotion == ChessPiece.PieceType.PAWN) {
-
-                    System.out.println(
-                            "Promotion must be QUEEN, ROOK, "
-                                    + "BISHOP, or KNIGHT."
-                    );
-                    return;
-                }
-            }
-
-            ChessMove move =
-                    new ChessMove(start, end, promotion);
-
-            UserGameCommand command =
-                    new UserGameCommand(
-                            UserGameCommand.CommandType.MAKE_MOVE,
-                            authToken,
-                            currentGameID,
-                            move
-                    );
-
-            webSocket.sendCommand(command);
-
-        } catch (IllegalArgumentException ex) {
-            System.out.println(
-                    "Invalid position or promotion piece."
-            );
-
-        } catch (Exception ex) {
-            System.out.println(
-                    "Unable to make move: "
-                            + ex.getMessage()
-            );
-        }
+        return ChessGame.TeamColor.valueOf(input);
     }
 
-    private ChessPosition parsePosition(String input) {
-        if (input == null || input.length() != 2) {
-            throw new IllegalArgumentException(
-                    "Position must contain two characters"
-            );
-        }
+    private void enterGameplay(
+            GameData selectedGame,
+            ChessGame.TeamColor perspective
+    ) throws Exception {
 
-        char file =
-                Character.toLowerCase(input.charAt(0));
-
-        char rank = input.charAt(1);
-
-        if (file < 'a' || file > 'h'
-                || rank < '1' || rank > '8') {
-
-            throw new IllegalArgumentException(
-                    "Position is outside the board"
-            );
-        }
-
-        int column = file - 'a' + 1;
-        int row = rank - '0';
-
-        return new ChessPosition(row, column);
-    }
-
-    private boolean isPromotionMove(
-            ChessPosition start,
-            ChessPosition end
-    ) {
-        if (currentGame == null
-                || currentGame.game() == null) {
-
-            return false;
-        }
-
-        ChessPiece piece =
-                currentGame.game()
-                        .getBoard()
-                        .getPiece(start);
-
-        if (piece == null
-                || piece.getPieceType()
-                != ChessPiece.PieceType.PAWN) {
-
-            return false;
-        }
-
-        return end.getRow() == 1
-                || end.getRow() == 8;
-    }
-
-    private void resignGame() {
-        if (webSocket == null || currentGameID == null) {
-            System.out.println(
-                    "You are not currently in a game."
-            );
-            return;
-        }
-
-        System.out.print(
-                "Are you sure you want to resign? (yes/no): "
-        );
-
-        String confirmation =
-                scanner.nextLine().trim();
-
-        if (!confirmation.equalsIgnoreCase("yes")) {
-            System.out.println("Resignation canceled.");
-            return;
-        }
-
-        try {
-            UserGameCommand resignCommand =
-                    new UserGameCommand(
-                            UserGameCommand.CommandType.RESIGN,
-                            authToken,
-                            currentGameID
-                    );
-
-            webSocket.sendCommand(resignCommand);
-
-            System.out.println("You resigned the game.");
-
-        } catch (Exception ex) {
-            System.out.println(
-                    "Unable to resign: "
-                            + ex.getMessage()
-            );
-        }
-    }
-
-    private void leaveGame() {
-        if (webSocket == null || currentGameID == null) {
-            System.out.println(
-                    "You are not currently in a game."
-            );
-            return;
-        }
-
-        try {
-            UserGameCommand leaveCommand =
-                    new UserGameCommand(
-                            UserGameCommand.CommandType.LEAVE,
-                            authToken,
-                            currentGameID
-                    );
-
-            webSocket.sendCommand(leaveCommand);
-            closeWebSocket();
-
-            currentGameID = null;
-            currentGame = null;
-            boardPerspective = ChessGame.TeamColor.WHITE;
-            state = State.POSTLOGIN;
-
-            System.out.println("You left the game.");
-
-        } catch (Exception ex) {
-            System.out.println(
-                    "Unable to leave game: "
-                            + ex.getMessage()
-            );
-        }
-    }
-
-    private void connectToGame() throws Exception {
-        closeWebSocket();
-
-        webSocket =
-                new WebSocketCommunicator(
+        GameplayClient gameplayClient =
+                new GameplayClient(
                         serverUrl,
-                        this
-                );
-
-        UserGameCommand connectCommand =
-                new UserGameCommand(
-                        UserGameCommand.CommandType.CONNECT,
+                        scanner,
                         authToken,
-                        currentGameID
+                        selectedGame.gameID(),
+                        perspective
                 );
 
-        webSocket.sendCommand(connectCommand);
-    }
-
-    private void closeWebSocket() {
-        if (webSocket == null) {
-            return;
-        }
-
-        try {
-            webSocket.close();
-        } catch (Exception ignored) {
-            // The connection may already be closed.
-        }
-
-        webSocket = null;
-    }
-
-    @Override
-    public void notify(ServerMessage message) {
-        if (message == null
-                || message.getServerMessageType() == null) {
-
-            System.out.println(
-                    "\nReceived an invalid server message."
-            );
-            return;
-        }
-
-        switch (message.getServerMessageType()) {
-            case LOAD_GAME -> handleLoadGame(message);
-
-            case NOTIFICATION -> System.out.println(
-                    "\n" + message.getMessage()
-            );
-
-            case ERROR -> System.out.println(
-                    "\n" + message.getErrorMessage()
-            );
-        }
-
-        System.out.print(">>> ");
-    }
-
-    private void handleLoadGame(ServerMessage message) {
-        GameData gameData = message.getGame();
-
-        if (gameData == null
-                || gameData.game() == null) {
-
-            System.out.println(
-                    "\nUnable to load game."
-            );
-            return;
-        }
-
-        currentGame = gameData;
-
-        System.out.println();
-
-        BoardDrawer.draw(
-                currentGame.game().getBoard(),
-                boardPerspective
-        );
+        shouldQuit = gameplayClient.run();
     }
 }
