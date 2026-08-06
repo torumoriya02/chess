@@ -21,25 +21,48 @@ public class WebSocketHandler {
         this.dataAccess = dataAccess;
     }
 
-    public void onMessage(WsContext ctx, String message) {
+    public void onMessage(
+            WsContext ctx,
+            String message
+    ) {
         try {
             UserGameCommand command =
-                    gson.fromJson(message, UserGameCommand.class);
+                    gson.fromJson(
+                            message,
+                            UserGameCommand.class
+                    );
 
-            if (command == null || command.getCommandType() == null) {
-                sendError(ctx, "Error: invalid command");
+            if (command == null
+                    || command.getCommandType() == null) {
+
+                sendError(
+                        ctx,
+                        "Error: invalid command"
+                );
                 return;
             }
 
             switch (command.getCommandType()) {
-                case CONNECT -> handleConnect(ctx, command);
-                case MAKE_MOVE -> handleMakeMove(ctx, command);
-                case LEAVE -> handleLeave(ctx, command);
-                case RESIGN -> handleResign(ctx, command);
+                case CONNECT ->
+                        handleConnect(ctx, command);
+
+                case MAKE_MOVE ->
+                        handleMakeMove(ctx, command);
+
+                case LEAVE ->
+                        handleLeave(ctx, command);
+
+                case RESIGN ->
+                        handleResign(ctx, command);
             }
 
         } catch (Exception ex) {
-            sendError(ctx, "Error: " + ex.getMessage());
+            String errorMessage =
+                    ex.getMessage() == null
+                            ? "Error: internal server error"
+                            : "Error: " + ex.getMessage();
+
+            sendError(ctx, errorMessage);
         }
     }
 
@@ -48,19 +71,24 @@ public class WebSocketHandler {
             UserGameCommand command
     ) throws Exception {
 
-        AuthData auth = getValidAuth(ctx, command);
+        AuthData auth =
+                getValidAuth(ctx, command);
 
         if (auth == null) {
             return;
         }
 
-        GameData gameData = getValidGame(ctx, command);
+        GameData gameData =
+                getValidGame(ctx, command);
 
         if (gameData == null) {
             return;
         }
 
-        connectionManager.add(command.getGameID(), ctx);
+        connectionManager.add(
+                command.getGameID(),
+                ctx
+        );
 
         ctx.send(
                 gson.toJson(
@@ -70,7 +98,10 @@ public class WebSocketHandler {
 
         ServerMessage notification =
                 ServerMessage.notification(
-                        buildConnectNotification(auth, gameData)
+                        buildConnectNotification(
+                                auth,
+                                gameData
+                        )
                 );
 
         broadcast(
@@ -85,59 +116,88 @@ public class WebSocketHandler {
             UserGameCommand command
     ) throws Exception {
 
-        AuthData auth = getValidAuth(ctx, command);
+        AuthData auth =
+                getValidAuth(ctx, command);
 
         if (auth == null) {
             return;
         }
 
-        GameData gameData = getValidGame(ctx, command);
+        GameData gameData =
+                getValidGame(ctx, command);
 
         if (gameData == null) {
             return;
         }
 
         if (command.getMove() == null) {
-            sendError(ctx, "Error: move is required");
+            sendError(
+                    ctx,
+                    "Error: move is required"
+            );
             return;
         }
 
         ChessGame game = gameData.game();
 
+        if (game == null) {
+            sendError(
+                    ctx,
+                    "Error: game data is missing"
+            );
+            return;
+        }
+
         if (game.isGameOver()) {
-            sendError(ctx, "Error: game is over");
+            sendError(
+                    ctx,
+                    "Error: game is over"
+            );
             return;
         }
 
         String username = auth.username();
 
         ChessGame.TeamColor playerColor =
-                getPlayerColor(username, gameData);
+                getPlayerColor(
+                        username,
+                        gameData
+                );
 
         if (playerColor == null) {
-            sendError(ctx, "Error: observers cannot make moves");
+            sendError(
+                    ctx,
+                    "Error: observers cannot make moves"
+            );
             return;
         }
 
         if (game.getTeamTurn() != playerColor) {
-            sendError(ctx, "Error: it is not your turn");
+            sendError(
+                    ctx,
+                    "Error: it is not your turn"
+            );
             return;
         }
 
         try {
             game.makeMove(command.getMove());
         } catch (InvalidMoveException ex) {
-            sendError(ctx, "Error: invalid move");
+            sendError(
+                    ctx,
+                    "Error: invalid move"
+            );
             return;
         }
 
-        GameData updatedGame = new GameData(
-                gameData.gameID(),
-                gameData.whiteUsername(),
-                gameData.blackUsername(),
-                gameData.gameName(),
-                game
-        );
+        GameData updatedGame =
+                new GameData(
+                        gameData.gameID(),
+                        gameData.whiteUsername(),
+                        gameData.blackUsername(),
+                        gameData.gameName(),
+                        game
+                );
 
         dataAccess.updateGame(updatedGame);
 
@@ -147,15 +207,20 @@ public class WebSocketHandler {
                 null
         );
 
-        broadcast(
-                command.getGameID(),
+        ServerMessage moveNotification =
                 ServerMessage.notification(
                         username
                                 + " moved "
-                                + command.getMove().getStartPosition()
+                                + command.getMove()
+                                .getStartPosition()
                                 + " to "
-                                + command.getMove().getEndPosition()
-                ),
+                                + command.getMove()
+                                .getEndPosition()
+                );
+
+        broadcast(
+                command.getGameID(),
+                moveNotification,
                 ctx
         );
 
@@ -170,13 +235,15 @@ public class WebSocketHandler {
             UserGameCommand command
     ) throws Exception {
 
-        AuthData auth = getValidAuth(ctx, command);
+        AuthData auth =
+                getValidAuth(ctx, command);
 
         if (auth == null) {
             return;
         }
 
-        GameData gameData = getValidGame(ctx, command);
+        GameData gameData =
+                getValidGame(ctx, command);
 
         if (gameData == null) {
             return;
@@ -184,8 +251,11 @@ public class WebSocketHandler {
 
         String username = auth.username();
 
-        String whiteUsername = gameData.whiteUsername();
-        String blackUsername = gameData.blackUsername();
+        String whiteUsername =
+                gameData.whiteUsername();
+
+        String blackUsername =
+                gameData.blackUsername();
 
         if (username.equals(whiteUsername)) {
             whiteUsername = null;
@@ -195,17 +265,21 @@ public class WebSocketHandler {
             blackUsername = null;
         }
 
-        GameData updatedGame = new GameData(
-                gameData.gameID(),
-                whiteUsername,
-                blackUsername,
-                gameData.gameName(),
-                gameData.game()
-        );
+        GameData updatedGame =
+                new GameData(
+                        gameData.gameID(),
+                        whiteUsername,
+                        blackUsername,
+                        gameData.gameName(),
+                        gameData.game()
+                );
 
         dataAccess.updateGame(updatedGame);
 
-        connectionManager.remove(command.getGameID(), ctx);
+        connectionManager.remove(
+                command.getGameID(),
+                ctx
+        );
 
         broadcast(
                 command.getGameID(),
@@ -221,13 +295,15 @@ public class WebSocketHandler {
             UserGameCommand command
     ) throws Exception {
 
-        AuthData auth = getValidAuth(ctx, command);
+        AuthData auth =
+                getValidAuth(ctx, command);
 
         if (auth == null) {
             return;
         }
 
-        GameData gameData = getValidGame(ctx, command);
+        GameData gameData =
+                getValidGame(ctx, command);
 
         if (gameData == null) {
             return;
@@ -236,29 +312,47 @@ public class WebSocketHandler {
         String username = auth.username();
 
         ChessGame.TeamColor playerColor =
-                getPlayerColor(username, gameData);
+                getPlayerColor(
+                        username,
+                        gameData
+                );
 
         if (playerColor == null) {
-            sendError(ctx, "Error: observers cannot resign");
+            sendError(
+                    ctx,
+                    "Error: observers cannot resign"
+            );
             return;
         }
 
         ChessGame game = gameData.game();
 
+        if (game == null) {
+            sendError(
+                    ctx,
+                    "Error: game data is missing"
+            );
+            return;
+        }
+
         if (game.isGameOver()) {
-            sendError(ctx, "Error: game is already over");
+            sendError(
+                    ctx,
+                    "Error: game is already over"
+            );
             return;
         }
 
         game.setGameOver(true);
 
-        GameData updatedGame = new GameData(
-                gameData.gameID(),
-                gameData.whiteUsername(),
-                gameData.blackUsername(),
-                gameData.gameName(),
-                game
-        );
+        GameData updatedGame =
+                new GameData(
+                        gameData.gameID(),
+                        gameData.whiteUsername(),
+                        gameData.blackUsername(),
+                        gameData.gameName(),
+                        game
+                );
 
         dataAccess.updateGame(updatedGame);
 
@@ -277,15 +371,23 @@ public class WebSocketHandler {
     ) throws Exception {
 
         if (command.getAuthToken() == null) {
-            sendError(ctx, "Error: unauthorized");
+            sendError(
+                    ctx,
+                    "Error: unauthorized"
+            );
             return null;
         }
 
         AuthData auth =
-                dataAccess.getAuth(command.getAuthToken());
+                dataAccess.getAuth(
+                        command.getAuthToken()
+                );
 
         if (auth == null) {
-            sendError(ctx, "Error: unauthorized");
+            sendError(
+                    ctx,
+                    "Error: unauthorized"
+            );
             return null;
         }
 
@@ -298,15 +400,23 @@ public class WebSocketHandler {
     ) throws Exception {
 
         if (command.getGameID() == null) {
-            sendError(ctx, "Error: game ID is required");
+            sendError(
+                    ctx,
+                    "Error: game ID is required"
+            );
             return null;
         }
 
         GameData gameData =
-                dataAccess.getGame(command.getGameID());
+                dataAccess.getGame(
+                        command.getGameID()
+                );
 
         if (gameData == null) {
-            sendError(ctx, "Error: game not found");
+            sendError(
+                    ctx,
+                    "Error: game not found"
+            );
             return null;
         }
 
@@ -319,26 +429,37 @@ public class WebSocketHandler {
     ) {
         String username = auth.username();
 
-        if (username.equals(gameData.whiteUsername())) {
-            return username + " joined the game as WHITE.";
+        if (username.equals(
+                gameData.whiteUsername()
+        )) {
+            return username
+                    + " joined the game as WHITE.";
         }
 
-        if (username.equals(gameData.blackUsername())) {
-            return username + " joined the game as BLACK.";
+        if (username.equals(
+                gameData.blackUsername()
+        )) {
+            return username
+                    + " joined the game as BLACK.";
         }
 
-        return username + " joined the game as an observer.";
+        return username
+                + " joined the game as an observer.";
     }
 
     private ChessGame.TeamColor getPlayerColor(
             String username,
             GameData gameData
     ) {
-        if (username.equals(gameData.whiteUsername())) {
+        if (username.equals(
+                gameData.whiteUsername()
+        )) {
             return ChessGame.TeamColor.WHITE;
         }
 
-        if (username.equals(gameData.blackUsername())) {
+        if (username.equals(
+                gameData.blackUsername()
+        )) {
             return ChessGame.TeamColor.BLACK;
         }
 
@@ -350,10 +471,19 @@ public class WebSocketHandler {
             GameData gameData
     ) {
         ChessGame game = gameData.game();
-        ChessGame.TeamColor teamToMove = game.getTeamTurn();
+
+        if (game == null) {
+            return;
+        }
+
+        ChessGame.TeamColor teamToMove =
+                game.getTeamTurn();
 
         String username =
-                getUsernameForColor(teamToMove, gameData);
+                getUsernameForColor(
+                        teamToMove,
+                        gameData
+                );
 
         if (game.isInCheckmate(teamToMove)) {
             game.setGameOver(true);
@@ -367,7 +497,8 @@ public class WebSocketHandler {
             broadcast(
                     gameID,
                     ServerMessage.notification(
-                            username + " is in checkmate."
+                            username
+                                    + " is in checkmate."
                     ),
                     null
             );
@@ -433,12 +564,32 @@ public class WebSocketHandler {
         String json = gson.toJson(message);
 
         for (WsContext connection
-                : connectionManager.getConnections(gameID)) {
+                : connectionManager
+                .getConnections(gameID)) {
 
-            if (connection != excludedContext) {
-                connection.send(json);
+            if (isExcluded(
+                    connection,
+                    excludedContext
+            )) {
+                continue;
             }
+
+            connection.send(json);
         }
+    }
+
+    private boolean isExcluded(
+            WsContext connection,
+            WsContext excludedContext
+    ) {
+        if (excludedContext == null) {
+            return false;
+        }
+
+        return connection.sessionId()
+                .equals(
+                        excludedContext.sessionId()
+                );
     }
 
     private void sendError(

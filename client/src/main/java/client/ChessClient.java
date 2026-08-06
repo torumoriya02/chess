@@ -1,16 +1,16 @@
 package client;
 
 import chess.ChessGame;
+import chess.ChessMove;
+import chess.ChessPiece;
+import chess.ChessPosition;
 import model.GameData;
 import websocket.commands.UserGameCommand;
 import websocket.messages.ServerMessage;
 
-import java.util.Scanner;
-import chess.ChessMove;
-import chess.ChessPiece;
-import chess.ChessPosition;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.Scanner;
 import java.util.Set;
 
 public class ChessClient implements NotificationHandler {
@@ -132,13 +132,13 @@ public class ChessClient implements NotificationHandler {
     }
 
     private void printGameplayHelp() {
-        System.out.println("help   - show gameplay commands");
-        System.out.println("redraw - redraw the chess board");
+        System.out.println("help      - show gameplay commands");
+        System.out.println("redraw    - redraw the chess board");
         System.out.println("highlight - show legal moves for a piece");
-        System.out.println("move   - make a chess move");
-        System.out.println("resign - resign the game");
-        System.out.println("leave  - leave the game");
-        System.out.println("quit   - exit the program");
+        System.out.println("move      - make a chess move");
+        System.out.println("resign    - resign the game");
+        System.out.println("leave     - leave the game");
+        System.out.println("quit      - exit the program");
     }
 
     private void login() {
@@ -197,7 +197,6 @@ public class ChessClient implements NotificationHandler {
     private void logout() {
         try {
             closeWebSocket();
-
             facade.logout(authToken);
 
             authToken = null;
@@ -219,9 +218,7 @@ public class ChessClient implements NotificationHandler {
             String gameName = scanner.nextLine().trim();
 
             if (gameName.isBlank()) {
-                System.out.println(
-                        "Game name cannot be empty."
-                );
+                System.out.println("Game name cannot be empty.");
                 return;
             }
 
@@ -406,6 +403,202 @@ public class ChessClient implements NotificationHandler {
         );
     }
 
+    private void highlightMoves() {
+        if (currentGame == null
+                || currentGame.game() == null) {
+
+            System.out.println(
+                    "No game is currently loaded."
+            );
+            return;
+        }
+
+        try {
+            System.out.print(
+                    "Piece position, for example e2: "
+            );
+
+            ChessPosition startPosition =
+                    parsePosition(
+                            scanner.nextLine().trim()
+                    );
+
+            Collection<ChessMove> validMoves =
+                    currentGame.game()
+                            .validMoves(startPosition);
+
+            if (validMoves == null) {
+                System.out.println(
+                        "There is no piece at that position."
+                );
+                return;
+            }
+
+            if (validMoves.isEmpty()) {
+                System.out.println(
+                        "That piece has no legal moves."
+                );
+                return;
+            }
+
+            Set<ChessPosition> highlightedPositions =
+                    new HashSet<>();
+
+            highlightedPositions.add(startPosition);
+
+            for (ChessMove move : validMoves) {
+                highlightedPositions.add(
+                        move.getEndPosition()
+                );
+            }
+
+            BoardDrawer.draw(
+                    currentGame.game().getBoard(),
+                    boardPerspective,
+                    highlightedPositions
+            );
+
+        } catch (IllegalArgumentException ex) {
+            System.out.println(
+                    "Invalid position. Use a square such as e2."
+            );
+        }
+    }
+
+    private void makeMove() {
+        if (webSocket == null || currentGameID == null) {
+            System.out.println(
+                    "You are not currently in a game."
+            );
+            return;
+        }
+
+        try {
+            System.out.print(
+                    "Start position, for example e2: "
+            );
+
+            ChessPosition start =
+                    parsePosition(
+                            scanner.nextLine().trim()
+                    );
+
+            System.out.print(
+                    "End position, for example e4: "
+            );
+
+            ChessPosition end =
+                    parsePosition(
+                            scanner.nextLine().trim()
+                    );
+
+            ChessPiece.PieceType promotion = null;
+
+            if (isPromotionMove(start, end)) {
+                System.out.print(
+                        "Promotion piece "
+                                + "(QUEEN, ROOK, BISHOP, KNIGHT): "
+                );
+
+                String promotionInput =
+                        scanner.nextLine()
+                                .trim()
+                                .toUpperCase();
+
+                promotion =
+                        ChessPiece.PieceType.valueOf(
+                                promotionInput
+                        );
+
+                if (promotion == ChessPiece.PieceType.KING
+                        || promotion == ChessPiece.PieceType.PAWN) {
+
+                    System.out.println(
+                            "Promotion must be QUEEN, ROOK, "
+                                    + "BISHOP, or KNIGHT."
+                    );
+                    return;
+                }
+            }
+
+            ChessMove move =
+                    new ChessMove(start, end, promotion);
+
+            UserGameCommand command =
+                    new UserGameCommand(
+                            UserGameCommand.CommandType.MAKE_MOVE,
+                            authToken,
+                            currentGameID,
+                            move
+                    );
+
+            webSocket.sendCommand(command);
+
+        } catch (IllegalArgumentException ex) {
+            System.out.println(
+                    "Invalid position or promotion piece."
+            );
+
+        } catch (Exception ex) {
+            System.out.println(
+                    "Unable to make move: "
+                            + ex.getMessage()
+            );
+        }
+    }
+
+    private ChessPosition parsePosition(String input) {
+        if (input == null || input.length() != 2) {
+            throw new IllegalArgumentException(
+                    "Position must contain two characters"
+            );
+        }
+
+        char file =
+                Character.toLowerCase(input.charAt(0));
+
+        char rank = input.charAt(1);
+
+        if (file < 'a' || file > 'h'
+                || rank < '1' || rank > '8') {
+
+            throw new IllegalArgumentException(
+                    "Position is outside the board"
+            );
+        }
+
+        int column = file - 'a' + 1;
+        int row = rank - '0';
+
+        return new ChessPosition(row, column);
+    }
+
+    private boolean isPromotionMove(
+            ChessPosition start,
+            ChessPosition end
+    ) {
+        if (currentGame == null
+                || currentGame.game() == null) {
+
+            return false;
+        }
+
+        ChessPiece piece =
+                currentGame.game()
+                        .getBoard()
+                        .getPiece(start);
+
+        if (piece == null
+                || piece.getPieceType()
+                != ChessPiece.PieceType.PAWN) {
+
+            return false;
+        }
+
+        return end.getRow() == 1
+                || end.getRow() == 8;
+    }
+
     private void resignGame() {
         if (webSocket == null || currentGameID == null) {
             System.out.println(
@@ -542,7 +735,9 @@ public class ChessClient implements NotificationHandler {
     private void handleLoadGame(ServerMessage message) {
         GameData gameData = message.getGame();
 
-        if (gameData == null || gameData.game() == null) {
+        if (gameData == null
+                || gameData.game() == null) {
+
             System.out.println(
                     "\nUnable to load game."
             );
@@ -557,179 +752,5 @@ public class ChessClient implements NotificationHandler {
                 currentGame.game().getBoard(),
                 boardPerspective
         );
-    }
-
-    private void makeMove() {
-        if (webSocket == null || currentGameID == null) {
-            System.out.println("You are not currently in a game.");
-            return;
-        }
-
-        try {
-            System.out.print("Start position, for example e2: ");
-            ChessPosition start =
-                    parsePosition(scanner.nextLine().trim());
-
-            System.out.print("End position, for example e4: ");
-            ChessPosition end =
-                    parsePosition(scanner.nextLine().trim());
-
-            ChessPiece.PieceType promotion = null;
-
-            if (isPromotionMove(start, end)) {
-                System.out.print(
-                        "Promotion piece "
-                                + "(QUEEN, ROOK, BISHOP, KNIGHT): "
-                );
-
-                String promotionInput =
-                        scanner.nextLine().trim().toUpperCase();
-
-                promotion =
-                        ChessPiece.PieceType.valueOf(promotionInput);
-
-                if (promotion == ChessPiece.PieceType.KING
-                        || promotion == ChessPiece.PieceType.PAWN) {
-
-                    System.out.println(
-                            "Promotion must be QUEEN, ROOK, "
-                                    + "BISHOP, or KNIGHT."
-                    );
-                    return;
-                }
-            }
-
-            ChessMove move =
-                    new ChessMove(start, end, promotion);
-
-            UserGameCommand command =
-                    new UserGameCommand(
-                            UserGameCommand.CommandType.MAKE_MOVE,
-                            authToken,
-                            currentGameID,
-                            move
-                    );
-
-            webSocket.sendCommand(command);
-
-        } catch (IllegalArgumentException ex) {
-            System.out.println(
-                    "Invalid position or promotion piece."
-            );
-
-        } catch (Exception ex) {
-            System.out.println(
-                    "Unable to make move: " + ex.getMessage()
-            );
-        }
-    }
-
-    private ChessPosition parsePosition(String input) {
-        if (input == null || input.length() != 2) {
-            throw new IllegalArgumentException(
-                    "Position must contain two characters"
-            );
-        }
-
-        char file = Character.toLowerCase(input.charAt(0));
-        char rank = input.charAt(1);
-
-        if (file < 'a' || file > 'h'
-                || rank < '1' || rank > '8') {
-
-            throw new IllegalArgumentException(
-                    "Position is outside the board"
-            );
-        }
-
-        int column = file - 'a' + 1;
-        int row = rank - '0';
-
-        return new ChessPosition(row, column);
-    }
-
-    private boolean isPromotionMove(
-            ChessPosition start,
-            ChessPosition end
-    ) {
-        if (currentGame == null || currentGame.game() == null) {
-            return false;
-        }
-
-        ChessPiece piece =
-                currentGame.game()
-                        .getBoard()
-                        .getPiece(start);
-
-        if (piece == null
-                || piece.getPieceType()
-                != ChessPiece.PieceType.PAWN) {
-
-            return false;
-        }
-
-        return end.getRow() == 1 || end.getRow() == 8;
-    }
-
-    private void highlightMoves() {
-        if (currentGame == null
-                || currentGame.game() == null) {
-
-            System.out.println(
-                    "No game is currently loaded."
-            );
-            return;
-        }
-
-        try {
-            System.out.print(
-                    "Piece position, for example e2: "
-            );
-
-            ChessPosition startPosition =
-                    parsePosition(
-                            scanner.nextLine().trim()
-                    );
-
-            Collection<ChessMove> validMoves =
-                    currentGame.game()
-                            .validMoves(startPosition);
-
-            if (validMoves == null) {
-                System.out.println(
-                        "There is no piece at that position."
-                );
-                return;
-            }
-
-            if (validMoves.isEmpty()) {
-                System.out.println(
-                        "That piece has no legal moves."
-                );
-                return;
-            }
-
-            Set<ChessPosition> highlightedPositions =
-                    new HashSet<>();
-
-            highlightedPositions.add(startPosition);
-
-            for (ChessMove move : validMoves) {
-                highlightedPositions.add(
-                        move.getEndPosition()
-                );
-            }
-
-            BoardDrawer.draw(
-                    currentGame.game().getBoard(),
-                    boardPerspective,
-                    highlightedPositions
-            );
-
-        } catch (IllegalArgumentException ex) {
-            System.out.println(
-                    "Invalid position. Use a square such as e2."
-            );
-        }
     }
 }
